@@ -26,9 +26,23 @@ export default function SettingsModal({
   const [catName, setCatName] = useState('')
   const [catColor, setCatColor] = useState(PRESET_COLORS[0])
   const [projName, setProjName] = useState('')
+  const [projCategoryId, setProjCategoryId] = useState(categories[0]?.id ?? '')
   const [tab, setTab] = useState<'categories' | 'projects'>('categories')
 
   if (!open) return null
+
+  const selectedProjCategoryId = categories.some(c => c.id === projCategoryId)
+    ? projCategoryId
+    : categories[0]?.id ?? ''
+
+  const projectsByCategory = categories
+    .map(cat => ({
+      cat,
+      projects: projects.filter(proj => proj.categoryId === cat.id),
+    }))
+    .filter(group => group.projects.length > 0)
+
+  const isPresetColor = PRESET_COLORS.includes(catColor)
 
   const handleAddCat = () => {
     if (!catName.trim()) return
@@ -37,8 +51,8 @@ export default function SettingsModal({
   }
 
   const handleAddProj = () => {
-    if (!projName.trim()) return
-    onAddProject({ name: projName.trim() })
+    if (!projName.trim() || !selectedProjCategoryId) return
+    onAddProject({ name: projName.trim(), categoryId: selectedProjCategoryId })
     setProjName('')
   }
 
@@ -73,7 +87,7 @@ export default function SettingsModal({
               />
               <button onClick={handleAddCat} style={styles.addBtn}>Add</button>
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
               {PRESET_COLORS.map(c => (
                 <div
                   key={c}
@@ -84,6 +98,19 @@ export default function SettingsModal({
                   }}
                 />
               ))}
+              <label
+                style={{
+                  ...styles.colorPickerWrap,
+                  border: isPresetColor ? '3px solid transparent' : '3px solid #111827',
+                }}
+              >
+                <input
+                  type="color"
+                  value={catColor}
+                  onChange={e => setCatColor(e.target.value)}
+                  style={styles.colorPicker}
+                />
+              </label>
             </div>
             <div style={styles.list}>
               {categories.map(cat => (
@@ -108,13 +135,31 @@ export default function SettingsModal({
                 onChange={e => setProjName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddProj()}
               />
+              <select
+                style={{ ...styles.input, width: 150 }}
+                value={selectedProjCategoryId}
+                onChange={e => setProjCategoryId(e.target.value)}
+              >
+                <option value="">Category</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
               <button onClick={handleAddProj} style={styles.addBtn}>Add</button>
             </div>
             <div style={styles.list}>
-              {projects.map(proj => (
-                <div key={proj.id} style={styles.listItem}>
-                  <span style={{ flex: 1 }}>{proj.name}</span>
-                  <button onClick={() => onDeleteProject(proj.id)} style={styles.deleteBtn}>✕</button>
+              {projectsByCategory.map(({ cat, projects }) => (
+                <div key={cat.id} style={styles.projectGroup}>
+                  <div style={styles.groupTitle}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color, display: 'inline-block' }} />
+                    {cat.name}
+                  </div>
+                  {projects.map(proj => (
+                    <div key={proj.id} style={styles.listItem}>
+                      <span style={{ flex: 1 }}>{proj.name}</span>
+                      <button onClick={() => onDeleteProject(proj.id)} style={styles.deleteBtn}>✕</button>
+                    </div>
+                  ))}
                 </div>
               ))}
               {projects.length === 0 && <p style={{ color: '#9ca3af', fontSize: 14 }}>No projects yet</p>}
@@ -150,6 +195,19 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#111827', color: '#fff', fontSize: 14, cursor: 'pointer',
   },
   list: { display: 'flex', flexDirection: 'column', gap: 4 },
+  projectGroup: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 },
+  groupTitle: {
+    display: 'flex', alignItems: 'center', gap: 6,
+    fontSize: 12, color: '#6b7280', fontWeight: 600, marginTop: 4,
+  },
+  colorPickerWrap: {
+    width: 24, height: 24, borderRadius: '50%', overflow: 'hidden',
+    cursor: 'pointer', boxSizing: 'border-box',
+  },
+  colorPicker: {
+    width: 36, height: 36, border: 'none', padding: 0,
+    transform: 'translate(-6px, -6px)', cursor: 'pointer',
+  },
   listItem: {
     display: 'flex', alignItems: 'center', padding: '8px 10px',
     borderRadius: 6, background: '#f9fafb', fontSize: 14,

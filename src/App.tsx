@@ -7,6 +7,22 @@ import Statistics from './pages/Statistics'
 import SettingsModal from './components/SettingsModal'
 import type { TaskBlock } from './types'
 
+interface TaskDefaults {
+  date: string
+  type: 'plan' | 'actual'
+  startTime: string
+  endTime: string
+}
+
+function getMonday(date: Date): Date {
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const monday = new Date(date)
+  monday.setDate(date.getDate() + diff)
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
 export default function App() {
   const {
     categories, projects, tasks,
@@ -16,20 +32,9 @@ export default function App() {
   } = useStore()
 
   const [page, setPage] = useState<'weekly' | 'statistics'>('weekly')
-  const [weekStart, setWeekStart] = useState(() => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    const monday = new Date(now)
-    monday.setDate(now.getDate() + diff)
-    monday.setHours(0, 0, 0, 0)
-    monday.setHours(0, 0, 0, 0)
-    console.log('weekStart day:', monday.getDay(), monday.toISOString())
-    return monday
-  })
-
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [modalOpen, setModalOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [taskDefaults, setTaskDefaults] = useState<TaskDefaults | null>(null)
   const [editTask, setEditTask] = useState<TaskBlock | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -45,15 +50,15 @@ export default function App() {
     setWeekStart(d)
   }
 
-  const handleClickSlot = (date: string) => {
-    setSelectedDate(date)
+  const handleCreateSelection = (defaults: TaskDefaults) => {
+    setTaskDefaults(defaults)
     setEditTask(null)
     setModalOpen(true)
   }
 
   const handleClickTask = (task: TaskBlock) => {
     setEditTask(task)
-    setSelectedDate(task.date)
+    setTaskDefaults(null)
     setModalOpen(true)
   }
 
@@ -63,7 +68,7 @@ export default function App() {
         weekStart={weekStart}
         onPrevWeek={handlePrevWeek}
         onNextWeek={handleNextWeek}
-        onAddTask={() => { setEditTask(null); setSelectedDate(''); setModalOpen(true) }}
+        onAddTask={() => { setEditTask(null); setTaskDefaults(null); setModalOpen(true) }}
         currentPage={page}
         onChangePage={setPage}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -74,7 +79,8 @@ export default function App() {
           weekStart={weekStart}
           tasks={tasks}
           categories={categories}
-          onClickSlot={handleClickSlot}
+          projects={projects}
+          onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
         />
       ) : (
@@ -88,7 +94,10 @@ export default function App() {
         onDelete={deleteTask}
         categories={categories}
         projects={projects}
-        initialDate={selectedDate}
+        initialDate={taskDefaults?.date}
+        initialType={taskDefaults?.type}
+        initialStartTime={taskDefaults?.startTime}
+        initialEndTime={taskDefaults?.endTime}
         editTask={editTask}
       />
 

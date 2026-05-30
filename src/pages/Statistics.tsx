@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { TaskBlock, Category, Project } from '../types'
-import { timeToMinutes } from '../utils/time'
+import { formatDate, timeToMinutes } from '../utils/time'
 
 interface Props {
   tasks: TaskBlock[]
@@ -38,7 +38,7 @@ function getRange(range: Range): { start: string; end: string } {
 }
 
 function fmt(d: Date) {
-  return d.toISOString().split('T')[0]
+  return formatDate(d)
 }
 
 function calcMinutes(tasks: TaskBlock[]) {
@@ -75,9 +75,11 @@ export default function Statistics({ tasks, categories, projects }: Props) {
 
   // 按项目统计
   const byProj = projects.map(proj => {
+    const planned = calcMinutes(filtered.filter(t => t.projectId === proj.id && t.type === 'plan'))
     const actual = calcMinutes(filtered.filter(t => t.projectId === proj.id && t.type === 'actual'))
-    return { proj, actual }
-  }).filter(r => r.actual > 0)
+    const cat = categories.find(c => c.id === proj.categoryId)
+    return { proj, cat, planned, actual, diff: actual - planned }
+  }).filter(r => r.planned > 0 || r.actual > 0)
 
   const rangeOptions: { value: Range; label: string }[] = [
     { value: 'thisWeek', label: 'This Week' },
@@ -144,14 +146,31 @@ export default function Statistics({ tasks, categories, projects }: Props) {
             <thead>
               <tr>
                 <th style={styles.th}>Project</th>
-                <th style={styles.th}>Total Actual Time</th>
+                <th style={styles.th}>Category</th>
+                <th style={styles.th}>Planned</th>
+                <th style={styles.th}>Actual</th>
+                <th style={styles.th}>Diff</th>
               </tr>
             </thead>
             <tbody>
-              {byProj.map(({ proj, actual }) => (
+              {byProj.map(({ proj, cat, planned, actual, diff }) => (
                 <tr key={proj.id}>
                   <td style={styles.td}>{proj.name}</td>
+                  <td style={styles.td}>
+                    {cat ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color, display: 'inline-block' }} />
+                        {cat.name}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>Unknown</span>
+                    )}
+                  </td>
+                  <td style={styles.td}>{fmtHoursAbs(planned)}</td>
                   <td style={styles.td}>{fmtHoursAbs(actual)}</td>
+                  <td style={{ ...styles.td, color: diff >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                    {fmtHours(diff)}
+                  </td>
                 </tr>
               ))}
             </tbody>

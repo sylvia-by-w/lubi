@@ -7,6 +7,7 @@ export interface Category {
 export interface Project {
   id: string
   name: string
+  categoryId: string
 }
 
 export interface TaskBlock {

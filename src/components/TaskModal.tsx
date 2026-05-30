@@ -9,12 +9,15 @@ interface Props {
   categories: Category[]
   projects: Project[]
   initialDate?: string
+  initialType?: 'plan' | 'actual'
+  initialStartTime?: string
+  initialEndTime?: string
   editTask?: TaskBlock | null
 }
 
 export default function TaskModal({
   open, onClose, onSave, onDelete,
-  categories, projects, initialDate, editTask
+  categories, projects, initialDate, initialType, initialStartTime, initialEndTime, editTask
 }: Props) {
   const [name, setName] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -38,13 +41,21 @@ export default function TaskModal({
       setCategoryId(categories[0]?.id ?? '')
       setProjectId('')
       setDate(initialDate ?? '')
-      setStartTime('09:00')
-      setEndTime('10:00')
-      setType('plan')
+      setStartTime(initialStartTime ?? '09:00')
+      setEndTime(initialEndTime ?? '10:00')
+      setType(initialType ?? 'plan')
     }
-  }, [editTask, open])
+  }, [categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, open])
 
   if (!open) return null
+
+  const handleProjectChange = (nextProjectId: string) => {
+    setProjectId(nextProjectId)
+    const project = projects.find(p => p.id === nextProjectId)
+    if (project) {
+      setCategoryId(project.categoryId)
+    }
+  }
 
   const handleSave = () => {
     if (!name.trim() || !categoryId || !date) return
@@ -82,7 +93,7 @@ export default function TaskModal({
         </select>
 
         <label style={styles.label}>Project (optional)</label>
-        <select style={styles.input} value={projectId} onChange={e => setProjectId(e.target.value)}>
+        <select style={styles.input} value={projectId} onChange={e => handleProjectChange(e.target.value)}>
           <option value="">None</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>

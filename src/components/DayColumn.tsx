@@ -1,18 +1,18 @@
+import { useState } from 'react'
 import type { TaskBlock, Category } from '../types'
+import { minutesToTime } from '../utils/time'
 
 interface Props {
   dateStr: string
   tasks: TaskBlock[]
   categories: Category[]
-  onClickSlot: (date: string) => void
+  onCreateSelection: (selection: {
+    date: string
+    type: 'plan' | 'actual'
+    startTime: string
+    endTime: string
+  }) => void
   onClickTask: (task: TaskBlock) => void
-}
-
-interface SegmentGroup {
-  startMin: number
-  endMin: number
-  planTask: TaskBlock | null
-  actualTask: TaskBlock | null
 }
 
 function timeToMin(t: string) {
@@ -20,104 +20,193 @@ function timeToMin(t: string) {
   return h * 60 + m
 }
 
-function buildSegments(tasks: TaskBlock[]): SegmentGroup[] {
-  const planTasks = tasks.filter(t => t.type === 'plan')
-  const actualTasks = tasks.filter(t => t.type === 'actual')
-
-  const points = new Set<number>([0, 24 * 60])
-  tasks.forEach(t => {
-    points.add(timeToMin(t.startTime))
-    points.add(timeToMin(t.endTime))
-  })
-
-  const sorted = Array.from(points).sort((a, b) => a - b)
-  const segments: SegmentGroup[] = []
-
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const segStart = sorted[i]
-    const segEnd = sorted[i + 1]
-    const mid = (segStart + segEnd) / 2
-
-    const planTask = planTasks.find(t =>
-      timeToMin(t.startTime) <= mid && mid < timeToMin(t.endTime)
-    ) ?? null
-
-    const actualTask = actualTasks.find(t =>
-      timeToMin(t.startTime) <= mid && mid < timeToMin(t.endTime)
-    ) ?? null
-
-    if (planTask || actualTask) {
-      segments.push({ startMin: segStart, endMin: segEnd, planTask, actualTask })
-    }
-  }
-
-  const merged: SegmentGroup[] = []
-  for (const seg of segments) {
-    const last = merged[merged.length - 1]
-    if (
-      last &&
-      last.planTask?.id === seg.planTask?.id &&
-      last.actualTask?.id === seg.actualTask?.id
-    ) {
-      last.endMin = seg.endMin
-    } else {
-      merged.push({ ...seg })
-    }
-  }
-
-  return merged
+function formatDuration(startTime: string, endTime: string) {
+  const minutes = Math.max(0, timeToMin(endTime) - timeToMin(startTime))
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h${m}min`
 }
 
-export default function DayColumn({ dateStr, tasks, categories, onClickSlot, onClickTask }: Props) {
-  const segments = buildSegments(tasks)
+const SLOT_MINUTES = 15
+const SLOT_COUNT = 96
+const ACTUAL_LANE_WIDTH = 0.7
+
+interface DragState {
+  type: 'plan' | 'actual'
+  startSlot: number
+  currentSlot: number
+}
+
+function clampSlot(slot: number) {
+  return Math.max(0, Math.min(SLOT_COUNT - 1, slot))
+}
+
+function slotFromPointerY(clientY: number, el: HTMLDivElement) {
+  const rect = el.getBoundingClientRect()
+  return clampSlot(Math.floor((clientY - rect.top) / (rect.height / SLOT_COUNT)))
+}
+
+function laneFromPointerX(clientX: number, el: HTMLDivElement): 'plan' | 'actual' {
+  const rect = el.getBoundingClientRect()
+  return (clientX - rect.left) / rect.width < ACTUAL_LANE_WIDTH ? 'actual' : 'plan'
+}
+
+function hasTaskAtSlot(tasks: TaskBlock[], type: 'plan' | 'actual', slot: number) {
+  const startMin = slot * SLOT_MINUTES
+  const endMin = startMin + SLOT_MINUTES
+  return tasks.some(t =>
+    t.type === type &&
+    timeToMin(t.startTime) < endMin &&
+    startMin < timeToMin(t.endTime)
+  )
+}
+
+function hexToRgb(hex: string) {
+  const normalized = hex.replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  }
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const rgb = hexToRgb(hex)
+  return rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})` : hex
+}
+
+function readableTextColor(hex: string) {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return '#fff'
+  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000
+  return brightness > 150 ? '#111827' : '#fff'
+}
+
+export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask }: Props) {
+  const [drag, setDrag] = useState<DragState | null>(null)
   const TOTAL = 24 * 60
+
+  const finishDrag = (finalDrag: DragState) => {
+    document.body.style.userSelect = ''
+
+    const startSlot = Math.min(finalDrag.startSlot, finalDrag.currentSlot)
+    const endSlot = Math.max(finalDrag.startSlot, finalDrag.currentSlot) + 1
+
+    setDrag(null)
+    onCreateSelection({
+      date: dateStr,
+      type: finalDrag.type,
+      startTime: minutesToTime(startSlot * SLOT_MINUTES),
+      endTime: minutesToTime(endSlot * SLOT_MINUTES),
+    })
+  }
 
   return (
     <div
-      style={{ position: 'relative', flex: 1, borderLeft: '1px solid #e5e7eb', cursor: 'pointer' }}
-      onClick={() => onClickSlot(dateStr)}
+      style={{ position: 'relative', flex: 1, borderLeft: '1px solid #e5e7eb', cursor: 'crosshair' }}
+      onPointerDown={e => {
+        if (e.button !== 0) return
+        const el = e.currentTarget
+        const type = laneFromPointerX(e.clientX, el)
+        const slot = slotFromPointerY(e.clientY, el)
+        if (hasTaskAtSlot(tasks, type, slot)) return
+
+        e.preventDefault()
+        el.setPointerCapture(e.pointerId)
+        document.body.style.userSelect = 'none'
+        setDrag({ type, startSlot: slot, currentSlot: slot })
+      }}
+      onPointerMove={e => {
+        if (!drag) return
+        const currentSlot = slotFromPointerY(e.clientY, e.currentTarget)
+        setDrag({ ...drag, currentSlot })
+      }}
+      onPointerUp={e => {
+        if (!drag) return
+        e.preventDefault()
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }
+        document.body.style.userSelect = ''
+        finishDrag({
+          ...drag,
+          currentSlot: slotFromPointerY(e.clientY, e.currentTarget),
+        })
+      }}
+      onPointerCancel={e => {
+        if (!drag) return
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }
+        document.body.style.userSelect = ''
+        setDrag(null)
+      }}
     >
-      {segments.map((seg, i) => {
-        const top = (seg.startMin / TOTAL) * 100
-        const height = ((seg.endMin - seg.startMin) / TOTAL) * 100
+      {drag && (
+        <SelectionBlock drag={drag} />
+      )}
+
+      {tasks.map(task => {
+        const startMin = timeToMin(task.startTime)
+        const endMin = timeToMin(task.endTime)
+        const top = (startMin / TOTAL) * 100
+        const height = ((endMin - startMin) / TOTAL) * 100
+        const isActual = task.type === 'actual'
 
         return (
           <div
-            key={i}
+            key={task.id}
             style={{
               position: 'absolute',
               top: `${top}%`,
               height: `${height}%`,
-              left: 0,
-              right: 0,
-              display: 'flex',
+              left: isActual ? 0 : '70%',
+              width: isActual ? '70%' : '30%',
+              zIndex: 2,
             }}
           >
-            {/* 实际永远占左边70% */}
-            {seg.actualTask ? (
+            {isActual ? (
               <ActualBlock
-                task={seg.actualTask}
+                task={task}
                 categories={categories}
                 onClick={onClickTask}
               />
             ) : (
-              <div style={{ width: '70%' }} />
-            )}
-
-            {/* 计划永远占右边30% */}
-            {seg.planTask ? (
               <PlanBlock
-                task={seg.planTask}
+                task={task}
                 categories={categories}
                 onClick={onClickTask}
               />
-            ) : (
-              <div style={{ width: '30%' }} />
             )}
           </div>
         )
       })}
     </div>
+  )
+}
+
+function SelectionBlock({ drag }: { drag: DragState }) {
+  const startSlot = Math.min(drag.startSlot, drag.currentSlot)
+  const endSlot = Math.max(drag.startSlot, drag.currentSlot) + 1
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: `${(startSlot / SLOT_COUNT) * 100}%`,
+        height: `${((endSlot - startSlot) / SLOT_COUNT) * 100}%`,
+        left: drag.type === 'actual' ? 0 : '70%',
+        width: drag.type === 'actual' ? '70%' : '30%',
+        background: 'rgba(99, 102, 241, 0.18)',
+        border: '1px solid rgba(99, 102, 241, 0.75)',
+        boxSizing: 'border-box',
+        pointerEvents: 'none',
+        zIndex: 3,
+      }}
+    />
   )
 }
 
@@ -128,14 +217,16 @@ function ActualBlock({ task, categories, onClick }: {
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
+  const textColor = readableTextColor(color)
 
   return (
     <div
+      onPointerDown={e => e.stopPropagation()}
       onClick={e => { e.stopPropagation(); onClick(task) }}
       style={{
-        width: '70%',
+        width: '100%',
         height: '100%',
-        background: `${color}cc`,
+        background: color,
         borderLeft: `4px solid ${color}`,
         boxSizing: 'border-box',
         padding: '3px 6px',
@@ -148,7 +239,7 @@ function ActualBlock({ task, categories, onClick }: {
       <span style={{
         fontSize: 12,
         fontWeight: 600,
-        color: '#fff',
+        color: textColor,
         lineHeight: 1.3,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -156,26 +247,30 @@ function ActualBlock({ task, categories, onClick }: {
       }}>
         {task.name}
       </span>
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)' }}>
-        {task.startTime}–{task.endTime}
+      <span style={{ fontSize: 10, color: hexToRgba(textColor, 0.78) }}>
+        {formatDuration(task.startTime, task.endTime)}
       </span>
     </div>
   )
 }
 
-function PlanBlock({ task, onClick }: {
+function PlanBlock({ task, categories, onClick }: {
   task: TaskBlock
   categories: Category[]
   onClick: (task: TaskBlock) => void
 }) {
+  const cat = categories.find(c => c.id === task.categoryId)
+  const color = cat?.color ?? '#6366f1'
+
   return (
     <div
+      onPointerDown={e => e.stopPropagation()}
       onClick={e => { e.stopPropagation(); onClick(task) }}
       style={{
-        width: '30%',
+        width: '100%',
         height: '100%',
-        background: '#f3f4f6',
-        border: '1.5px dashed #d1d5db',
+        background: hexToRgba(color, 0.14),
+        border: `1.5px dashed ${color}`,
         boxSizing: 'border-box',
         padding: '3px 4px',
         overflow: 'hidden',
@@ -187,13 +282,16 @@ function PlanBlock({ task, onClick }: {
       <span style={{
         fontSize: 10,
         fontWeight: 500,
-        color: '#9ca3af',
+        color: '#111827',
         lineHeight: 1.3,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       }}>
         {task.name}
+      </span>
+      <span style={{ fontSize: 10, color: '#6b7280' }}>
+        {formatDuration(task.startTime, task.endTime)}
       </span>
     </div>
   )

@@ -17,7 +17,7 @@ export default function NavBar({ weekStart, onPrevWeek, onNextWeek, onAddTask, o
 
   return (
     <div style={styles.nav}>
-      <span style={styles.logo}>Lyubishchev</span>
+      <span style={styles.logo}>Lubi</span>
 
       <div style={styles.tabs}>
         <button
