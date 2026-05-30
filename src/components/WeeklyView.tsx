@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TaskBlock, Category, Project } from '../types'
 import { getWeekDays, formatDate, formatDayLabel, timeToMinutes } from '../utils/time'
+import {
+  generateDailyReview,
+  generateWeeklyReview,
+  type AIReviewResult,
+  type DailyReviewData,
+  type ReviewTask,
+  type ReviewTotal,
+  type WeeklyReviewData,
+} from '../services/aiReviewService'
 import DayColumn from './DayColumn'
 import './WeeklyView.css'
 
@@ -30,6 +39,8 @@ const SLOT_HEIGHT = 20
 const TOTAL_HEIGHT = 96 * SLOT_HEIGHT
 const DAILY_REVIEWS_KEY = 'lyubishchev_daily_reviews'
 const WEEKLY_FINDINGS_KEY = 'lyubishchev_weekly_findings'
+const AI_DAILY_REVIEWS_KEY = 'lubi_ai_daily_reviews'
+const AI_WEEKLY_REVIEWS_KEY = 'lubi_ai_weekly_reviews'
 
 const emptyReview: DailyReview = {
   wentWell: '',
@@ -66,6 +77,38 @@ function fmtHoursAbs(min: number) {
   const h = Math.floor(min / 60)
   const m = min % 60
   return m === 0 ? `${h}h` : `${h}h${m}m`
+}
+
+function taskMinutes(task: TaskBlock) {
+  return timeToMinutes(task.endTime) - timeToMinutes(task.startTime)
+}
+
+function taskToReviewTask(task: TaskBlock, categories: Category[], projects: Project[]): ReviewTask {
+  const category = categories.find(c => c.id === task.categoryId)
+  const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
+  return {
+    name: task.name,
+    category: category?.name ?? 'Unknown',
+    project: project?.name,
+    startTime: task.startTime,
+    endTime: task.endTime,
+    durationMinutes: taskMinutes(task),
+  }
+}
+
+function buildTotals(items: Array<{ id: string; name: string }>, tasks: TaskBlock[], getId: (task: TaskBlock) => string | undefined): ReviewTotal[] {
+  return items
+    .map(item => {
+      const itemTasks = tasks.filter(t => getId(t) === item.id)
+      const planned = calcMinutes(itemTasks.filter(t => t.type === 'plan'))
+      const actual = calcMinutes(itemTasks.filter(t => t.type === 'actual'))
+      return { name: item.name, planned, actual, diff: actual - planned }
+    })
+    .filter(item => item.planned > 0 || item.actual > 0)
+}
+
+function sortByDeviation(totals: ReviewTotal[]) {
+  return [...totals].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
 }
 
 function useDailyReview(date: string) {
@@ -105,6 +148,33 @@ function useWeeklyFinding(weekKey: string) {
   return { finding: findings[weekKey] ?? '', updateFinding }
 }
 
+function useAIReviews() {
+  const [dailyReviews, setDailyReviews] = useState<Record<string, AIReviewResult>>(() =>
+    loadRecord<AIReviewResult>(AI_DAILY_REVIEWS_KEY)
+  )
+  const [weeklyReviews, setWeeklyReviews] = useState<Record<string, AIReviewResult>>(() =>
+    loadRecord<AIReviewResult>(AI_WEEKLY_REVIEWS_KEY)
+  )
+
+  const saveDailyReview = (date: string, result: AIReviewResult) => {
+    setDailyReviews(prev => {
+      const next = { ...prev, [date]: result }
+      saveRecord(AI_DAILY_REVIEWS_KEY, next)
+      return next
+    })
+  }
+
+  const saveWeeklyReview = (weekKey: string, result: AIReviewResult) => {
+    setWeeklyReviews(prev => {
+      const next = { ...prev, [weekKey]: result }
+      saveRecord(AI_WEEKLY_REVIEWS_KEY, next)
+      return next
+    })
+  }
+
+  return { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview }
+}
+
 export default function WeeklyView({
   weekStart,
   tasks,
@@ -121,6 +191,9 @@ export default function WeeklyView({
   const [selectedDate, setSelectedDate] = useState(defaultSelectedDate)
   const { review, updateReview } = useDailyReview(selectedDate)
   const { finding, updateFinding } = useWeeklyFinding(weekKey)
+  const { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview } = useAIReviews()
+  const [aiLoading, setAiLoading] = useState<'daily' | 'weekly' | null>(null)
+  const [aiError, setAiError] = useState('')
 
   useEffect(() => {
     setSelectedDate(defaultSelectedDate)
@@ -136,6 +209,15 @@ export default function WeeklyView({
     const weekDates = new Set(days.map(formatDate))
     return tasks.filter(t => weekDates.has(t.date))
   }, [days, tasks])
+
+  const weekDailyNotes = days
+    .map(d => {
+      const date = formatDate(d)
+      return { date, ...(loadRecord<DailyReview>(DAILY_REVIEWS_KEY)[date] ?? emptyReview) }
+    })
+    .filter(item =>
+      item.wentWell || item.wentWrong || item.deviationReason || item.tomorrowAdjustment
+    )
 
   const allocation = categories
     .map(cat => ({
@@ -176,6 +258,83 @@ export default function WeeklyView({
     : categoryDeviationStats
   ).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 5)
 
+  const selectedDateTasks = tasks.filter(t => t.date === selectedDate)
+  const selectedDayCategoryTotals = buildTotals(categories, selectedDateTasks, task => task.categoryId)
+  const selectedDayProjectTotals = buildTotals(projects, selectedDateTasks, task => task.projectId)
+  const selectedDayDeviations = sortByDeviation(
+    selectedDayProjectTotals.length > 0 ? selectedDayProjectTotals : selectedDayCategoryTotals
+  ).slice(0, 5)
+
+  const dailyAIResult = dailyReviews[selectedDate]
+  const weeklyAIResult = weeklyReviews[weekKey]
+
+  const buildDailyData = (): DailyReviewData => ({
+    date: selectedDate,
+    plannedTasks: selectedDateTasks
+      .filter(t => t.type === 'plan')
+      .map(t => taskToReviewTask(t, categories, projects)),
+    actualTasks: selectedDateTasks
+      .filter(t => t.type === 'actual')
+      .map(t => taskToReviewTask(t, categories, projects)),
+    categoryTotals: selectedDayCategoryTotals,
+    projectTotals: selectedDayProjectTotals,
+    biggestDeviations: selectedDayDeviations,
+    notes: review,
+  })
+
+  const buildWeeklyData = (): WeeklyReviewData => {
+    const weekEnd = formatDate(days[days.length - 1])
+    return {
+      weekStart: weekKey,
+      weekEnd,
+      tasks: weekTasks.map(t => taskToReviewTask(t, categories, projects)),
+      categoryAllocation: categoryDeviationStats.map(item => ({
+        name: item.label,
+        planned: item.planned,
+        actual: item.actual,
+        diff: item.diff,
+      })),
+      topProjects: projectStats
+        .map(item => ({ name: item.project.name, planned: item.planned, actual: item.actual, diff: item.diff }))
+        .sort((a, b) => b.actual - a.actual)
+        .slice(0, 5),
+      biggestDeviations: deviationStats.map(item => ({
+        name: item.label,
+        planned: item.planned,
+        actual: item.actual,
+        diff: item.diff,
+      })),
+      keyFindings: finding,
+      dailyNotes: weekDailyNotes,
+    }
+  }
+
+  const handleGenerateDailyReview = async () => {
+    setAiLoading('daily')
+    setAiError('')
+    try {
+      const result = await generateDailyReview(buildDailyData())
+      saveDailyReview(selectedDate, result)
+    } catch {
+      setAiError('Daily review generation failed.')
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  const handleGenerateWeeklyReview = async () => {
+    setAiLoading('weekly')
+    setAiError('')
+    try {
+      const result = await generateWeeklyReview(buildWeeklyData())
+      saveWeeklyReview(weekKey, result)
+    } catch {
+      setAiError('Weekly review generation failed.')
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
   const handleCreateSelection = (selection: {
     date: string
     type: 'plan' | 'actual'
@@ -210,8 +369,31 @@ export default function WeeklyView({
 
         <section className="dashboard-card">
           <h2>AI Review</h2>
-          <button className="ghost-button">Generate Daily Review</button>
-          <button className="ghost-button">Generate Weekly Review</button>
+          <button
+            className="ghost-button"
+            onClick={handleGenerateDailyReview}
+            disabled={aiLoading !== null}
+          >
+            {aiLoading === 'daily' ? 'Generating Daily Review...' : 'Generate Daily Review'}
+          </button>
+          <button
+            className="ghost-button"
+            onClick={handleGenerateWeeklyReview}
+            disabled={aiLoading !== null}
+          >
+            {aiLoading === 'weekly' ? 'Generating Weekly Review...' : 'Generate Weekly Review'}
+          </button>
+          {aiError && <p className="ai-error">{aiError}</p>}
+          {(dailyAIResult || weeklyAIResult) && (
+            <div className="ai-output-list">
+              {dailyAIResult && (
+                <AIOutput title={`Daily ${selectedDate}`} result={dailyAIResult} />
+              )}
+              {weeklyAIResult && (
+                <AIOutput title={`Weekly ${weekKey}`} result={weeklyAIResult} />
+              )}
+            </div>
+          )}
         </section>
       </aside>
 
@@ -371,5 +553,17 @@ function ReviewField({ label, value, onChange }: {
         onChange={e => onChange(e.target.value)}
       />
     </label>
+  )
+}
+
+function AIOutput({ title, result }: { title: string; result: AIReviewResult }) {
+  return (
+    <div className="ai-output">
+      <div className="ai-output-title">
+        <span>{title}</span>
+        <small>{new Date(result.generatedAt).toLocaleString()}</small>
+      </div>
+      <pre>{result.output}</pre>
+    </div>
   )
 }
