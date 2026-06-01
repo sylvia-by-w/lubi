@@ -3,9 +3,12 @@ import { useStore } from './store/useStore'
 import NavBar from './components/NavBar'
 import WeeklyView from './components/WeeklyView'
 import TaskModal from './components/TaskModal'
+import Projects from './pages/Projects'
 import Statistics from './pages/Statistics'
 import SettingsModal from './components/SettingsModal'
+import DeadlineModal from './components/DeadlineModal'
 import type { TaskBlock } from './types'
+import { exportWeeklyExcel } from './utils/excelExport'
 
 interface TaskDefaults {
   date: string
@@ -25,18 +28,21 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, tasks,
+    categories, projects, projectTasks, tasks, deadlines,
     addTask, updateTask, deleteTask,
     addCategory, deleteCategory,
-    addProject, deleteProject
+    addProject, updateProject, deleteProject,
+    addProjectTask, updateProjectTask, deleteProjectTask,
+    addDeadline, updateDeadline, deleteDeadline
   } = useStore()
 
-  const [page, setPage] = useState<'weekly' | 'statistics'>('weekly')
+  const [page, setPage] = useState<'weekly' | 'projects' | 'statistics'>('weekly')
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [modalOpen, setModalOpen] = useState(false)
   const [taskDefaults, setTaskDefaults] = useState<TaskDefaults | null>(null)
   const [editTask, setEditTask] = useState<TaskBlock | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [deadlinesOpen, setDeadlinesOpen] = useState(false)
 
   const handlePrevWeek = () => {
     const d = new Date(weekStart)
@@ -63,12 +69,16 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <NavBar
         weekStart={weekStart}
         onPrevWeek={handlePrevWeek}
         onNextWeek={handleNextWeek}
         onAddTask={() => { setEditTask(null); setTaskDefaults(null); setModalOpen(true) }}
+        onExportWeeklyExcel={() => exportWeeklyExcel({ weekStart, tasks, categories, projects })}
+        onOpenDeadlines={() => setDeadlinesOpen(true)}
+        deadlines={deadlines}
+        projects={projects}
         currentPage={page}
         onChangePage={setPage}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -80,11 +90,26 @@ export default function App() {
           tasks={tasks}
           categories={categories}
           projects={projects}
+          projectTasks={projectTasks}
+          deadlines={deadlines}
           onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
         />
+      ) : page === 'projects' ? (
+        <Projects
+          projects={projects}
+          categories={categories}
+          deadlines={deadlines}
+          calendarTasks={tasks}
+          projectTasks={projectTasks}
+          weekStart={weekStart}
+          onUpdateProject={updateProject}
+          onAddProjectTask={addProjectTask}
+          onUpdateProjectTask={updateProjectTask}
+          onDeleteProjectTask={deleteProjectTask}
+        />
       ) : (
-        <Statistics tasks={tasks} categories={categories} projects={projects} />
+        <Statistics tasks={tasks} categories={categories} projects={projects} deadlines={deadlines} />
       )}
 
       <TaskModal
@@ -110,6 +135,17 @@ export default function App() {
         onDeleteCategory={deleteCategory}
         onAddProject={addProject}
         onDeleteProject={deleteProject}
+      />
+
+      <DeadlineModal
+        open={deadlinesOpen}
+        onClose={() => setDeadlinesOpen(false)}
+        deadlines={deadlines}
+        categories={categories}
+        projects={projects}
+        onAddDeadline={addDeadline}
+        onUpdateDeadline={updateDeadline}
+        onDeleteDeadline={deleteDeadline}
       />
     </div>
   )

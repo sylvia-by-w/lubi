@@ -106,7 +106,7 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
 
   return (
     <div
-      style={{ position: 'relative', flex: 1, borderLeft: '1px solid #e5e7eb', cursor: 'crosshair' }}
+      style={{ position: 'relative', flex: 1, borderLeft: '1px solid var(--border)', cursor: 'crosshair' }}
       onPointerDown={e => {
         if (e.button !== 0) return
         const el = e.currentTarget
@@ -200,8 +200,8 @@ function SelectionBlock({ drag }: { drag: DragState }) {
         height: `${((endSlot - startSlot) / SLOT_COUNT) * 100}%`,
         left: drag.type === 'actual' ? 0 : '70%',
         width: drag.type === 'actual' ? '70%' : '30%',
-        background: 'rgba(99, 102, 241, 0.18)',
-        border: '1px solid rgba(99, 102, 241, 0.75)',
+        background: 'rgba(79, 70, 229, 0.14)',
+        border: '1px solid rgba(79, 70, 229, 0.65)',
         boxSizing: 'border-box',
         pointerEvents: 'none',
         zIndex: 3,
@@ -282,7 +282,7 @@ function PlanBlock({ task, categories, onClick }: {
       <span style={{
         fontSize: 10,
         fontWeight: 500,
-        color: '#111827',
+        color: 'var(--text-primary)',
         lineHeight: 1.3,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -290,7 +290,7 @@ function PlanBlock({ task, categories, onClick }: {
       }}>
         {task.name}
       </span>
-      <span style={{ fontSize: 10, color: '#6b7280' }}>
+      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
         {formatDuration(task.startTime, task.endTime)}
       </span>
     </div>

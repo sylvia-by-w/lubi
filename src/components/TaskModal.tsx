@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import type { TaskBlock, Category, Project } from '../types'
+import { useState } from 'react'
+import type { TaskBlock, Category, Project, TimeQualityLevel } from '../types'
 
 interface Props {
   open: boolean
@@ -15,45 +15,143 @@ interface Props {
   editTask?: TaskBlock | null
 }
 
+function suggestedValueLevel(categories: Category[], nextCategoryId: string): TimeQualityLevel | '' {
+  const categoryName = categories.find(c => c.id === nextCategoryId)?.name.toLowerCase()
+  if (!categoryName) return ''
+  if (categoryName === 'waste') return 'low'
+  if (categoryName === 'university' || categoryName === 'personal growth') return 'high'
+  if (categoryName === 'fitness') return 'high'
+  if (categoryName === 'life maintenance' || categoryName === 'relax / social') return 'medium'
+  return ''
+}
+
+interface FormState {
+  name: string
+  categoryId: string
+  projectId: string
+  date: string
+  startTime: string
+  endTime: string
+  type: 'plan' | 'actual'
+  energyLevel: TimeQualityLevel | ''
+  valueLevel: TimeQualityLevel | ''
+}
+
+function getInitialFormState({
+  categories,
+  editTask,
+  initialDate,
+  initialEndTime,
+  initialStartTime,
+  initialType,
+}: Pick<Props, 'categories' | 'editTask' | 'initialDate' | 'initialEndTime' | 'initialStartTime' | 'initialType'>): FormState {
+  if (editTask) {
+    return {
+      name: editTask.name,
+      categoryId: editTask.categoryId,
+      projectId: editTask.projectId ?? '',
+      date: editTask.date,
+      startTime: editTask.startTime,
+      endTime: editTask.endTime,
+      type: editTask.type,
+      energyLevel: editTask.energyLevel ?? '',
+      valueLevel: editTask.valueLevel ?? '',
+    }
+  }
+
+  const nextCategoryId = categories[0]?.id ?? ''
+  const nextType = initialType ?? 'plan'
+  return {
+    name: '',
+    categoryId: nextCategoryId,
+    projectId: '',
+    date: initialDate ?? '',
+    startTime: initialStartTime ?? '09:00',
+    endTime: initialEndTime ?? '10:00',
+    type: nextType,
+    energyLevel: '',
+    valueLevel: nextType === 'actual' ? suggestedValueLevel(categories, nextCategoryId) : '',
+  }
+}
+
 export default function TaskModal({
   open, onClose, onSave, onDelete,
   categories, projects, initialDate, initialType, initialStartTime, initialEndTime, editTask
 }: Props) {
-  const [name, setName] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [date, setDate] = useState(initialDate ?? '')
-  const [startTime, setStartTime] = useState('09:00')
-  const [endTime, setEndTime] = useState('10:00')
-  const [type, setType] = useState<'plan' | 'actual'>('plan')
-
-  useEffect(() => {
-    if (editTask) {
-      setName(editTask.name)
-      setCategoryId(editTask.categoryId)
-      setProjectId(editTask.projectId ?? '')
-      setDate(editTask.date)
-      setStartTime(editTask.startTime)
-      setEndTime(editTask.endTime)
-      setType(editTask.type)
-    } else {
-      setName('')
-      setCategoryId(categories[0]?.id ?? '')
-      setProjectId('')
-      setDate(initialDate ?? '')
-      setStartTime(initialStartTime ?? '09:00')
-      setEndTime(initialEndTime ?? '10:00')
-      setType(initialType ?? 'plan')
-    }
-  }, [categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, open])
-
   if (!open) return null
+
+  const modalKey = editTask
+    ? `edit-${editTask.id}`
+    : `new-${initialDate ?? ''}-${initialType ?? 'plan'}-${initialStartTime ?? ''}-${initialEndTime ?? ''}-${categories[0]?.id ?? ''}`
+
+  return (
+    <TaskModalContent
+      key={modalKey}
+      onClose={onClose}
+      onDelete={onDelete}
+      onSave={onSave}
+      categories={categories}
+      projects={projects}
+      initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType })}
+      editTask={editTask}
+    />
+  )
+}
+
+function TaskModalContent({
+  onClose,
+  onDelete,
+  onSave,
+  categories,
+  projects,
+  initialState,
+  editTask,
+}: {
+  onClose: () => void
+  onDelete?: (id: string) => void
+  onSave: (task: Omit<TaskBlock, 'id'>) => void
+  categories: Category[]
+  projects: Project[]
+  initialState: FormState
+  editTask?: TaskBlock | null
+}) {
+  const [name, setName] = useState(initialState.name)
+  const [categoryId, setCategoryId] = useState(initialState.categoryId)
+  const [projectId, setProjectId] = useState(initialState.projectId)
+  const [date, setDate] = useState(initialState.date)
+  const [startTime, setStartTime] = useState(initialState.startTime)
+  const [endTime, setEndTime] = useState(initialState.endTime)
+  const [type, setType] = useState<'plan' | 'actual'>(initialState.type)
+  const [energyLevel, setEnergyLevel] = useState<TimeQualityLevel | ''>(initialState.energyLevel)
+  const [valueLevel, setValueLevel] = useState<TimeQualityLevel | ''>(initialState.valueLevel)
 
   const handleProjectChange = (nextProjectId: string) => {
     setProjectId(nextProjectId)
     const project = projects.find(p => p.id === nextProjectId)
     if (project) {
-      setCategoryId(project.categoryId)
+      handleCategoryChange(project.categoryId)
+    }
+  }
+
+  const handleCategoryChange = (nextCategoryId: string) => {
+    const previousSuggestion = suggestedValueLevel(categories, categoryId)
+    const nextSuggestion = suggestedValueLevel(categories, nextCategoryId)
+    setCategoryId(nextCategoryId)
+    if (type === 'actual' && (!valueLevel || valueLevel === previousSuggestion)) {
+      setValueLevel(nextSuggestion)
+    }
+  }
+
+  const handleTypeChange = (nextType: 'plan' | 'actual') => {
+    setType(nextType)
+    if (nextType === 'plan') {
+      setEnergyLevel('')
+      setValueLevel('')
+      return
+    }
+
+    if (!valueLevel) {
+      setValueLevel(suggestedValueLevel(categories, categoryId))
     }
   }
 
@@ -67,6 +165,8 @@ export default function TaskModal({
       startTime,
       endTime,
       type,
+      energyLevel: type === 'actual' && energyLevel ? energyLevel : undefined,
+      valueLevel: type === 'actual' && valueLevel ? valueLevel : undefined,
     })
     onClose()
   }
@@ -85,7 +185,7 @@ export default function TaskModal({
         />
 
         <label style={styles.label}>Category</label>
-        <select style={styles.input} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+        <select style={styles.input} value={categoryId} onChange={e => handleCategoryChange(e.target.value)}>
           <option value="">Select category</option>
           {categories.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
@@ -122,14 +222,27 @@ export default function TaskModal({
         <label style={styles.label}>Type</label>
         <div style={styles.row}>
           <button
-            style={{ ...styles.typeBtn, background: type === 'plan' ? '#6366f1' : '#f3f4f6', color: type === 'plan' ? '#fff' : '#374151' }}
-            onClick={() => setType('plan')}
+            style={{ ...styles.typeBtn, ...(type === 'plan' ? styles.typeBtnActive : {}) }}
+            onClick={() => handleTypeChange('plan')}
           >Plan</button>
           <button
-            style={{ ...styles.typeBtn, background: type === 'actual' ? '#6366f1' : '#f3f4f6', color: type === 'actual' ? '#fff' : '#374151' }}
-            onClick={() => setType('actual')}
+            style={{ ...styles.typeBtn, ...(type === 'actual' ? styles.typeBtnActive : {}) }}
+            onClick={() => handleTypeChange('actual')}
           >Actual</button>
         </div>
+
+        {type === 'actual' && (
+          <div style={styles.qualityGrid}>
+            <div>
+              <label style={styles.label}>Energy</label>
+              <QualitySelector value={energyLevel} onChange={setEnergyLevel} />
+            </div>
+            <div>
+              <label style={styles.label}>Value</label>
+              <QualitySelector value={valueLevel} onChange={setValueLevel} />
+            </div>
+          </div>
+        )}
 
         <div style={{ ...styles.row, marginTop: 24 }}>
           {editTask && onDelete && (
@@ -143,36 +256,81 @@ export default function TaskModal({
   )
 }
 
+function QualitySelector({
+  value,
+  onChange,
+}: {
+  value: TimeQualityLevel | ''
+  onChange: (value: TimeQualityLevel | '') => void
+}) {
+  const levels: { value: TimeQualityLevel; label: string }[] = [
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+  ]
+
+  return (
+    <div style={styles.qualityRow}>
+      {levels.map(level => (
+        <button
+          key={level.value}
+          style={{
+            ...styles.qualityBtn,
+            ...(value === level.value ? styles.qualityBtnActive : {}),
+          }}
+          onClick={() => onChange(value === level.value ? '' : level.value)}
+        >
+          {level.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.42)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
   },
   modal: {
-    background: '#fff', borderRadius: 12, padding: 28, width: 420,
+    background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, width: 420,
     display: 'flex', flexDirection: 'column', gap: 6,
+    boxShadow: 'var(--shadow-popover)', border: '1px solid var(--border)',
   },
-  title: { margin: 0, marginBottom: 8, fontSize: 18, fontWeight: 600 },
-  label: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
+  title: { margin: 0, marginBottom: 8, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' },
+  label: { fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2, fontWeight: 700 },
   input: {
-    width: '100%', padding: '8px 10px', borderRadius: 6,
-    border: '1px solid #e5e7eb', fontSize: 14, boxSizing: 'border-box',
+    width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+    border: '1px solid var(--border)', fontSize: 14, boxSizing: 'border-box',
+    background: 'var(--surface)', color: 'var(--text-primary)',
   },
   row: { display: 'flex', gap: 8 },
+  qualityGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 6 },
+  qualityRow: { display: 'flex', gap: 4 },
   typeBtn: {
-    flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
-    fontSize: 14, cursor: 'pointer', fontWeight: 500,
+    flex: 1, padding: '8px 0', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+    fontSize: 14, cursor: 'pointer', fontWeight: 700, background: 'var(--surface-muted)', color: 'var(--text-primary)',
+  },
+  typeBtnActive: {
+    background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)',
+  },
+  qualityBtn: {
+    flex: 1, padding: '6px 0', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+    background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', fontWeight: 700,
+  },
+  qualityBtnActive: {
+    background: 'var(--primary-soft)', color: 'var(--primary)', border: '1px solid #c7d2fe',
   },
   saveBtn: {
-    flex: 1, padding: '10px 0', borderRadius: 6, border: 'none',
-    background: '#6366f1', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 500,
+    flex: 1, padding: '10px 0', borderRadius: 'var(--radius-sm)', border: 'none',
+    background: 'var(--primary)', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 800,
   },
   cancelBtn: {
-    flex: 1, padding: '10px 0', borderRadius: 6, border: '1px solid #e5e7eb',
-    background: '#fff', fontSize: 14, cursor: 'pointer',
+    flex: 1, padding: '10px 0', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+    background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer', fontWeight: 700,
   },
   deleteBtn: {
-    flex: 1, padding: '10px 0', borderRadius: 6, border: 'none',
-    background: '#fee2e2', color: '#dc2626', fontSize: 14, cursor: 'pointer',
+    flex: 1, padding: '10px 0', borderRadius: 'var(--radius-sm)', border: 'none',
+    background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: 14, cursor: 'pointer', fontWeight: 700,
   },
 }

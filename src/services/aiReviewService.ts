@@ -21,12 +21,7 @@ export interface DailyReviewData {
   categoryTotals: ReviewTotal[]
   projectTotals: ReviewTotal[]
   biggestDeviations: ReviewTotal[]
-  notes: {
-    wentWell: string
-    wentWrong: string
-    deviationReason: string
-    tomorrowAdjustment: string
-  }
+  userNote?: string
 }
 
 export interface WeeklyReviewData {
@@ -36,14 +31,11 @@ export interface WeeklyReviewData {
   categoryAllocation: ReviewTotal[]
   topProjects: ReviewTotal[]
   biggestDeviations: ReviewTotal[]
-  keyFindings: string
   dailyNotes: Array<{
     date: string
-    wentWell: string
-    wentWrong: string
-    deviationReason: string
-    tomorrowAdjustment: string
+    userNote: string
   }>
+  userNote?: string
 }
 
 export interface AIReviewResult {
@@ -97,11 +89,7 @@ export function buildDailyReviewPrompt(data: DailyReviewData) {
     'Biggest deviations:',
     listTotals(data.biggestDeviations),
     '',
-    'Existing notes:',
-    `- Went well: ${data.notes.wentWell || 'None'}`,
-    `- Went wrong: ${data.notes.wentWrong || 'None'}`,
-    `- Deviation reason: ${data.notes.deviationReason || 'None'}`,
-    `- Tomorrow adjustment: ${data.notes.tomorrowAdjustment || 'None'}`,
+    `User note: ${data.userNote || 'None'}`,
   ].join('\n')
 }
 
@@ -124,14 +112,12 @@ export function buildWeeklyReviewPrompt(data: WeeklyReviewData) {
     'Biggest deviations:',
     listTotals(data.biggestDeviations),
     '',
-    `Key findings: ${data.keyFindings || 'None'}`,
+    `Weekly user note: ${data.userNote || 'None'}`,
     '',
     'Daily review notes:',
     data.dailyNotes.length === 0
       ? '- None'
-      : data.dailyNotes.map(n =>
-          `- ${n.date}: went well "${n.wentWell || 'None'}"; went wrong "${n.wentWrong || 'None'}"; reason "${n.deviationReason || 'None'}"; adjustment "${n.tomorrowAdjustment || 'None'}"`
-        ).join('\n'),
+      : data.dailyNotes.map(n => `- ${n.date}: ${n.userNote}`).join('\n'),
   ].join('\n')
 }
 
@@ -145,11 +131,11 @@ function mockDailyOutput(data: DailyReviewData) {
     biggest
       ? `Main deviation: ${biggest.name} changed by ${fmtMinutes(biggest.diff)} versus plan.`
       : 'Main deviation: No meaningful planned-vs-actual deviation was found.',
-    data.notes.deviationReason
-      ? `Likely cause: Your note points to "${data.notes.deviationReason}".`
+    data.userNote
+      ? `Likely cause: Your note adds context: "${data.userNote}".`
       : 'Likely cause: Add a short deviation reason to make the next review more precise.',
-    data.notes.tomorrowAdjustment
-      ? `Tomorrow adjustment: ${data.notes.tomorrowAdjustment}`
+    data.userNote
+      ? 'Tomorrow adjustment: Convert the note into one concrete scheduling correction before starting the next day.'
       : 'Tomorrow adjustment: Choose one concrete scheduling correction before starting the day.',
   ].join('\n\n')
 }
@@ -171,8 +157,8 @@ function mockWeeklyOutput(data: WeeklyReviewData) {
     biggest
       ? `Biggest deviation: ${biggest.name} differed from plan by ${fmtMinutes(biggest.diff)}.`
       : 'Biggest deviation: No planned-vs-actual comparison is available yet.',
-    data.keyFindings
-      ? `Next week adjustment: Turn this finding into a rule: ${data.keyFindings}`
+    data.userNote
+      ? `Next week adjustment: Turn this note into a rule: ${data.userNote}`
       : 'Next week adjustment: Write one weekly finding, then convert it into a planning rule.',
   ].join('\n\n')
 }

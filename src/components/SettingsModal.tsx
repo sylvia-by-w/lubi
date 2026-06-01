@@ -60,7 +60,7 @@ export default function SettingsModal({
     <div style={styles.overlay}>
       <div style={styles.modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Settings</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Settings</h2>
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
         </div>
 
@@ -94,14 +94,14 @@ export default function SettingsModal({
                   onClick={() => setCatColor(c)}
                   style={{
                     width: 24, height: 24, borderRadius: '50%', background: c,
-                    cursor: 'pointer', border: catColor === c ? '3px solid #111827' : '3px solid transparent'
+                    cursor: 'pointer', border: catColor === c ? '3px solid var(--text-primary)' : '3px solid transparent'
                   }}
                 />
               ))}
               <label
                 style={{
                   ...styles.colorPickerWrap,
-                  border: isPresetColor ? '3px solid transparent' : '3px solid #111827',
+                  border: isPresetColor ? '3px solid transparent' : '3px solid var(--text-primary)',
                 }}
               >
                 <input
@@ -120,7 +120,7 @@ export default function SettingsModal({
                   <button onClick={() => onDeleteCategory(cat.id)} style={styles.deleteBtn}>✕</button>
                 </div>
               ))}
-              {categories.length === 0 && <p style={{ color: '#9ca3af', fontSize: 14 }}>No categories yet</p>}
+              {categories.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No categories yet</p>}
             </div>
           </div>
         )}
@@ -162,7 +162,7 @@ export default function SettingsModal({
                   ))}
                 </div>
               ))}
-              {projects.length === 0 && <p style={{ color: '#9ca3af', fontSize: 14 }}>No projects yet</p>}
+              {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No projects yet</p>}
             </div>
           </div>
         )}
@@ -173,32 +173,34 @@ export default function SettingsModal({
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.42)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
   },
   modal: {
-    background: '#fff', borderRadius: 12, padding: 28, width: 440,
+    background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, width: 440,
     maxHeight: '80vh', overflowY: 'auto',
+    border: '1px solid var(--border)', boxShadow: 'var(--shadow-popover)',
   },
-  tabs: { display: 'flex', gap: 4, marginBottom: 20 },
+  tabs: { display: 'flex', gap: 4, marginBottom: 20, padding: 3, border: '1px solid var(--border)', borderRadius: 999, background: 'var(--surface-muted)' },
   tab: {
-    padding: '6px 16px', borderRadius: 6, border: 'none',
-    background: 'transparent', fontSize: 14, cursor: 'pointer', color: '#6b7280',
+    padding: '6px 16px', borderRadius: 999, border: 'none',
+    background: 'transparent', fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 700,
   },
-  tabActive: { background: '#f3f4f6', color: '#111827', fontWeight: 500 },
+  tabActive: { background: 'var(--surface)', color: 'var(--primary)', fontWeight: 800, boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)' },
   addRow: { display: 'flex', gap: 8, marginBottom: 12 },
   input: {
-    padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14,
+    padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: 14,
+    background: 'var(--surface)', color: 'var(--text-primary)',
   },
   addBtn: {
-    padding: '8px 16px', borderRadius: 6, border: 'none',
-    background: '#111827', color: '#fff', fontSize: 14, cursor: 'pointer',
+    padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none',
+    background: 'var(--primary)', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 800,
   },
   list: { display: 'flex', flexDirection: 'column', gap: 4 },
   projectGroup: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 },
   groupTitle: {
     display: 'flex', alignItems: 'center', gap: 6,
-    fontSize: 12, color: '#6b7280', fontWeight: 600, marginTop: 4,
+    fontSize: 12, color: 'var(--text-secondary)', fontWeight: 700, marginTop: 4,
   },
   colorPickerWrap: {
     width: 24, height: 24, borderRadius: '50%', overflow: 'hidden',
@@ -210,14 +212,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   listItem: {
     display: 'flex', alignItems: 'center', padding: '8px 10px',
-    borderRadius: 6, background: '#f9fafb', fontSize: 14,
+    borderRadius: 'var(--radius-sm)', background: 'var(--surface-soft)', fontSize: 14, color: 'var(--text-primary)',
   },
   deleteBtn: {
     border: 'none', background: 'transparent', cursor: 'pointer',
-    color: '#9ca3af', fontSize: 12, padding: '2px 4px',
+    color: 'var(--text-muted)', fontSize: 12, padding: '2px 4px',
   },
   closeBtn: {
     border: 'none', background: 'transparent', cursor: 'pointer',
-    fontSize: 16, color: '#6b7280',
+    fontSize: 16, color: 'var(--text-secondary)',
   },
 }
