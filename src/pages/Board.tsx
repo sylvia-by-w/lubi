@@ -199,8 +199,11 @@ export default function Board({
               </div>
             </div>
             <p style={styles.hint}>点击状态胶囊切换任务进度。点击某一天的格子可以记录当天实际花的时间(和周视图里同一个时间块编辑器)。</p>
+            {visibleTasks.length === 0 && (
+              <p style={styles.emptyText}>添加任务后，这里会显示每天的进度。</p>
+            )}
             <div style={styles.gridWrap}>
-              <div style={{ ...styles.grid, gridTemplateColumns: `160px repeat(${RANGE_DAYS}, 40px)` }}>
+              <div style={{ ...styles.grid, gridTemplateColumns: `160px repeat(${RANGE_DAYS}, minmax(40px, 1fr))` }}>
                 <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>任务</div>
                 {days.map(d => {
                   const ds = fmtDate(d)
@@ -314,6 +317,9 @@ function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; cat
   const W = 240, H = 130
   if (categories.length === 0) {
     return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无分类</div>
+  }
+  if (tasks.length === 0) {
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无任务数据</div>
   }
   const colW = W / categories.length
 
