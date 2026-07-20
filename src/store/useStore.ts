@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Category, Deadline, Project, ProjectTask, TaskBlock } from '../types'
+import type { Category, Deadline, HabitItem, HabitLog, Project, ProjectTask, TaskBlock } from '../types'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -7,6 +7,8 @@ const KEYS = {
   projectTasks: 'lyubishchev_project_tasks',
   tasks: 'lyubishchev_tasks',
   deadlines: 'lyubishchev_deadlines',
+  habits: 'lyubishchev_habits',
+  habitLogs: 'lyubishchev_habit_logs',
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -54,12 +56,20 @@ export function useStore() {
   const [deadlines, setDeadlines] = useState<Deadline[]>(() =>
     load(KEYS.deadlines, [])
   )
+  const [habits, setHabits] = useState<HabitItem[]>(() =>
+    load(KEYS.habits, [])
+  )
+  const [habitLogs, setHabitLogs] = useState<HabitLog[]>(() =>
+    load(KEYS.habitLogs, [])
+  )
 
   useEffect(() => save(KEYS.categories, categories), [categories])
   useEffect(() => save(KEYS.projects, projects), [projects])
   useEffect(() => save(KEYS.projectTasks, projectTasks), [projectTasks])
   useEffect(() => save(KEYS.tasks, tasks), [tasks])
   useEffect(() => save(KEYS.deadlines, deadlines), [deadlines])
+  useEffect(() => save(KEYS.habits, habits), [habits])
+  useEffect(() => save(KEYS.habitLogs, habitLogs), [habitLogs])
 
   const addCategory = (cat: Omit<Category, 'id'>) => {
     const newCat = { ...cat, id: crypto.randomUUID() }
@@ -144,8 +154,30 @@ export function useStore() {
     setDeadlines(prev => prev.filter(d => d.id !== id))
   }
 
+  const addHabit = (habit: Omit<HabitItem, 'id' | 'createdAt'>) => {
+    const newHabit = { ...habit, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
+    setHabits(prev => [...prev, newHabit])
+  }
+
+  const updateHabit = (id: string, updates: Partial<Omit<HabitItem, 'id' | 'createdAt'>>) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h))
+  }
+
+  const deleteHabit = (id: string) => {
+    setHabits(prev => prev.filter(h => h.id !== id))
+    setHabitLogs(prev => prev.filter(l => l.habitId !== id))
+  }
+
+  const toggleHabitLog = (habitId: string, date: string) => {
+    setHabitLogs(prev => {
+      const existing = prev.find(l => l.habitId === habitId && l.date === date)
+      if (existing) return prev.filter(l => l.id !== existing.id)
+      return [...prev, { id: crypto.randomUUID(), habitId, date }]
+    })
+  }
+
   const exportAllData = () => {
-    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines }, null, 2)
+    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines, habits, habitLogs }, null, 2)
   }
 
   const importAllData = (json: string) => {
@@ -155,15 +187,18 @@ export function useStore() {
     if (Array.isArray(data.projectTasks)) setProjectTasks(data.projectTasks.map(normalizeProjectTask))
     if (Array.isArray(data.tasks)) setTasks(data.tasks)
     if (Array.isArray(data.deadlines)) setDeadlines(data.deadlines)
+    if (Array.isArray(data.habits)) setHabits(data.habits)
+    if (Array.isArray(data.habitLogs)) setHabitLogs(data.habitLogs)
   }
 
   return {
-    categories, projects, projectTasks, tasks, deadlines,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addTask, updateTask, deleteTask,
     addDeadline, updateDeadline, deleteDeadline,
+    addHabit, updateHabit, deleteHabit, toggleHabitLog,
     exportAllData, importAllData,
   }
 }

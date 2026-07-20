@@ -79,10 +79,26 @@ export interface TaskBlock {
   valueLevel?: TimeQualityLevel
 }
 
+export interface HabitItem {
+  id: string
+  name: string
+  categoryId?: string
+  createdAt: string
+  archived?: boolean
+}
+
+export interface HabitLog {
+  id: string
+  habitId: string
+  date: string
+}
+
 export interface AppState {
   categories: Category[]
   projects: Project[]
   projectTasks: ProjectTask[]
   tasks: TaskBlock[]
   deadlines: Deadline[]
+  habits: HabitItem[]
+  habitLogs: HabitLog[]
 }

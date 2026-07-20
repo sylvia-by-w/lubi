@@ -1,5 +1,5 @@
 import { Fragment, useState, type CSSProperties } from 'react'
-import type { Category, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
+import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
 import { timeToMinutes } from '../utils/time'
 
 interface Props {
@@ -7,15 +7,22 @@ interface Props {
   categories: Category[]
   projects: Project[]
   tasks: TaskBlock[]
+  habits: HabitItem[]
   onAddProjectTask: (task: Omit<ProjectTask, 'id' | 'createdAt' | 'completedAt'>, options?: { skipCompletedAt?: boolean }) => string
   onUpdateProjectTask: (id: string, updates: Partial<Omit<ProjectTask, 'id' | 'createdAt'>>) => void
   onDeleteProjectTask: (id: string) => void
   onLogTime: (task: ProjectTask, date: string, existingBlock?: TaskBlock) => void
+  onAddHabit: (habit: Omit<HabitItem, 'id' | 'createdAt'>) => void
+  onDeleteHabit: (id: string) => void
+  onToggleHabitLog: (habitId: string, date: string) => void
+  habitLogs: { id: string; habitId: string; date: string }[]
 }
 
 const RANGE_DAYS = 10
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
 const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
+type RowMode = 'task' | 'category' | 'habit'
+const ROW_MODE_LABEL: Record<RowMode, string> = { task: '任务', category: '分类', habit: '习惯' }
 
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -69,12 +76,16 @@ interface NewTaskForm {
 const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDate: '', priority: 'medium' }
 
 export default function Board({
-  projectTasks, categories, projects, tasks,
+  projectTasks, categories, projects, tasks, habits, habitLogs,
   onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask, onLogTime,
+  onAddHabit, onDeleteHabit, onToggleHabitLog,
 }: Props) {
   const [rangeStart, setRangeStart] = useState(() => startOfToday())
   const [form, setForm] = useState<NewTaskForm>({ ...emptyForm, categoryId: categories[0]?.id ?? '' })
   const [hideDone, setHideDone] = useState(false)
+  const [rowMode, setRowMode] = useState<RowMode>('task')
+  const [habitName, setHabitName] = useState('')
+  const [habitCategoryId, setHabitCategoryId] = useState('')
 
   const days = Array.from({ length: RANGE_DAYS }, (_, i) => addDays(rangeStart, i))
   const todayStr = fmtDate(startOfToday())
@@ -83,6 +94,7 @@ export default function Board({
     .filter(t => !hideDone || t.status !== 'done')
     .sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'))
 
+  const activeHabits = habits.filter(h => !h.archived)
   const actualEntries = tasks.filter(t => t.type === 'actual')
 
   const handleAddTask = () => {
@@ -98,6 +110,12 @@ export default function Board({
     setForm({ ...emptyForm, categoryId: form.categoryId })
   }
 
+  const handleAddHabit = () => {
+    if (!habitName.trim()) return
+    onAddHabit({ name: habitName.trim(), categoryId: habitCategoryId || undefined })
+    setHabitName('')
+  }
+
   const toggleStatus = (task: ProjectTask) => {
     const next = nextStatus(task.status)
     onUpdateProjectTask(task.id, {
@@ -109,6 +127,26 @@ export default function Board({
   const doneCount = projectTasks.filter(t => t.status === 'done').length
   const inProgressCount = projectTasks.filter(t => t.status === 'in_progress').length
   const todoCount = projectTasks.filter(t => t.status === 'todo').length
+
+  // minutes logged for a given category on a given day, across all tasks resolving to it
+  const categoryMinutes = (categoryId: string, ds: string) => {
+    const idsInCategory = new Set(
+      projectTasks.filter(t => taskCategory(t, categories, projects)?.id === categoryId).map(t => t.id)
+    )
+    return actualEntries
+      .filter(e => e.date === ds && e.projectTaskId && idsInCategory.has(e.projectTaskId))
+      .reduce((sum, e) => sum + Math.max(0, timeToMinutes(e.endTime) - timeToMinutes(e.startTime)), 0)
+  }
+
+  const gridHint =
+    rowMode === 'task' ? '点击圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
+    : rowMode === 'category' ? '每个分类当天的总投入时间，深浅代表投入多少，来自任务维度下记录的时间块。'
+    : '点击圆点为这个习惯打今天的卡，再点一次可以取消。'
+
+  const isEmpty =
+    (rowMode === 'task' && visibleTasks.length === 0) ||
+    (rowMode === 'category' && categories.length === 0) ||
+    (rowMode === 'habit' && activeHabits.length === 0)
 
   return (
     <div style={styles.page}>
@@ -186,6 +224,41 @@ export default function Board({
               {visibleTasks.length === 0 && <p style={styles.emptyText}>暂无任务，从上面添加一个吧。</p>}
             </div>
           </section>
+
+          <section style={styles.panel}>
+            <h3 style={styles.panelTitle}>习惯</h3>
+            <p style={styles.hint}>这些是周期性打卡的小事(早睡、运动、阅读…)，不会挤进任务清单，只出现在进度网格的"习惯"视图里。</p>
+            <div style={styles.row}>
+              <input
+                style={{ ...styles.input, flex: 1, marginBottom: 0 }}
+                placeholder="习惯名称，比如早睡"
+                value={habitName}
+                onChange={e => setHabitName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddHabit()}
+              />
+              <select style={{ ...styles.input, width: 110, marginBottom: 0 }} value={habitCategoryId} onChange={e => setHabitCategoryId(e.target.value)}>
+                <option value="">无分类</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <button style={{ ...styles.addBtn, marginTop: 8 }} onClick={handleAddHabit}>+ 添加习惯</button>
+            {activeHabits.length > 0 && (
+              <div style={{ ...styles.taskList, marginTop: 10 }}>
+                {activeHabits.map(h => {
+                  const cat = h.categoryId ? categories.find(c => c.id === h.categoryId) : undefined
+                  return (
+                    <div key={h.id} style={styles.taskRow}>
+                      <span style={{ ...styles.dot, background: cat?.color ?? 'var(--text-muted)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={styles.taskName}>{h.name}</div>
+                      </div>
+                      <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="删除习惯">x</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
         <div style={styles.midCol}>
@@ -198,13 +271,29 @@ export default function Board({
                 <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, RANGE_DAYS))}>下一页 &#8250;</button>
               </div>
             </div>
-            <p style={styles.hint}>点击状态胶囊切换任务进度。点击某一天的格子可以记录当天实际花的时间(和周视图里同一个时间块编辑器)。</p>
-            {visibleTasks.length === 0 && (
-              <p style={styles.emptyText}>添加任务后，这里会显示每天的进度。</p>
+
+            <div style={styles.modeSwitch}>
+              {(['task', 'category', 'habit'] as RowMode[]).map(mode => (
+                <button
+                  key={mode}
+                  style={{ ...styles.modeBtn, ...(rowMode === mode ? styles.modeBtnActive : {}) }}
+                  onClick={() => setRowMode(mode)}
+                >
+                  {ROW_MODE_LABEL[mode]}
+                </button>
+              ))}
+            </div>
+
+            <p style={styles.hint}>{gridHint}</p>
+            {isEmpty && (
+              <p style={styles.emptyText}>
+                {rowMode === 'habit' ? '左侧先添加一个习惯，这里会显示每天的打卡情况。' : '添加任务后，这里会显示每天的进度。'}
+              </p>
             )}
+
             <div style={styles.gridWrap}>
               <div style={{ ...styles.grid, gridTemplateColumns: `160px repeat(${RANGE_DAYS}, minmax(40px, 1fr))` }}>
-                <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>任务</div>
+                <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>{ROW_MODE_LABEL[rowMode]}</div>
                 {days.map(d => {
                   const ds = fmtDate(d)
                   return (
@@ -214,7 +303,7 @@ export default function Board({
                   )
                 })}
 
-                {visibleTasks.map(task => {
+                {rowMode === 'task' && visibleTasks.map(task => {
                   const cat = taskCategory(task, categories, projects)
                   return (
                     <Fragment key={task.id}>
@@ -234,7 +323,55 @@ export default function Board({
                             title={title}
                             onClick={() => onLogTime(task, ds, entries[0])}
                           >
-                            <div style={{ ...styles.block, background: cat?.color ?? '#999', opacity }} />
+                            <div style={{ ...styles.dotCell, background: cat?.color ?? '#999', opacity: opacity || 0, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
+                          </div>
+                        )
+                      })}
+                    </Fragment>
+                  )
+                })}
+
+                {rowMode === 'category' && categories.map(cat => (
+                  <Fragment key={cat.id}>
+                    <div style={{ ...styles.cell, ...styles.rowLabel }} title={cat.name}>{cat.name}</div>
+                    {days.map(d => {
+                      const ds = fmtDate(d)
+                      const minutes = categoryMinutes(cat.id, ds)
+                      const opacity = minutes === 0 ? 0 : Math.min(1, 0.35 + minutes / 240)
+                      const title = minutes === 0 ? '这天没有记录' : `共 ${(minutes / 60).toFixed(1)} 小时`
+                      return (
+                        <div
+                          key={cat.id + ds}
+                          style={{ ...styles.cell, ...(ds === todayStr ? styles.todayCol : {}) }}
+                          title={title}
+                        >
+                          <div style={{ ...styles.dotCell, background: cat.color, opacity: opacity || 0, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
+                        </div>
+                      )
+                    })}
+                  </Fragment>
+                ))}
+
+                {rowMode === 'habit' && activeHabits.map(habit => {
+                  const cat = habit.categoryId ? categories.find(c => c.id === habit.categoryId) : undefined
+                  return (
+                    <Fragment key={habit.id}>
+                      <div style={{ ...styles.cell, ...styles.rowLabel }} title={habit.name}>{habit.name}</div>
+                      {days.map(d => {
+                        const ds = fmtDate(d)
+                        const done = habitLogs.some(l => l.habitId === habit.id && l.date === ds)
+                        return (
+                          <div
+                            key={habit.id + ds}
+                            style={{ ...styles.cell, ...styles.blockCell, ...(ds === todayStr ? styles.todayCol : {}) }}
+                            title={done ? '已打卡，点击取消' : '点击打卡'}
+                            onClick={() => onToggleHabitLog(habit.id, ds)}
+                          >
+                            <div style={{
+                              ...styles.dotCell,
+                              background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
+                              border: done ? 'none' : '1.5px solid var(--border-soft)',
+                            }} />
                           </div>
                         )
                       })}
@@ -389,6 +526,9 @@ const styles: Record<string, CSSProperties> = {
   emptyText: { margin: 0, color: 'var(--text-muted)', fontSize: 13 },
   navBtn: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface)', color: 'var(--text-secondary)', padding: '5px 9px', cursor: 'pointer', fontSize: 12, fontWeight: 700 },
   hint: { fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' },
+  modeSwitch: { display: 'inline-flex', gap: 2, background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 999, padding: 2, marginBottom: 8 },
+  modeBtn: { border: 'none', background: 'transparent', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', cursor: 'pointer' },
+  modeBtnActive: { background: 'var(--surface)', color: 'var(--primary)', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)' },
   gridWrap: { overflow: 'auto' },
   grid: { display: 'grid', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' },
   cell: { borderRight: '1px solid var(--border-soft)', borderBottom: '1px solid var(--border-soft)', minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-muted)' },
@@ -396,7 +536,7 @@ const styles: Record<string, CSSProperties> = {
   corner: { justifyContent: 'flex-start', paddingLeft: 6 },
   rowLabel: { justifyContent: 'flex-start', paddingLeft: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', background: 'var(--surface-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   blockCell: { cursor: 'pointer' },
-  block: { width: 20, height: 20, borderRadius: 4 },
+  dotCell: { width: 15, height: 15, borderRadius: '50%', boxSizing: 'border-box' },
   todayCol: { background: '#fffbe6' },
   chartBox: { width: '100%', height: 140, display: 'block' },
   legendRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-primary)' },

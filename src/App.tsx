@@ -32,12 +32,13 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, projectTasks, tasks, deadlines,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs,
     addTask, updateTask, deleteTask,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addDeadline, updateDeadline, deleteDeadline,
+    addHabit, deleteHabit, toggleHabitLog,
     exportAllData, importAllData
   } = useStore()
 
@@ -125,10 +126,15 @@ export default function App() {
           categories={categories}
           projects={projects}
           tasks={tasks}
+          habits={habits}
+          habitLogs={habitLogs}
           onAddProjectTask={addProjectTask}
           onUpdateProjectTask={updateProjectTask}
           onDeleteProjectTask={deleteProjectTask}
           onLogTime={handleLogTime}
+          onAddHabit={addHabit}
+          onDeleteHabit={deleteHabit}
+          onToggleHabitLog={toggleHabitLog}
         />
       ) : page === 'projects' ? (
         <Projects
