@@ -12,6 +12,9 @@ interface Props {
   initialType?: 'plan' | 'actual'
   initialStartTime?: string
   initialEndTime?: string
+  initialCategoryId?: string
+  initialProjectId?: string
+  initialProjectTaskId?: string
   editTask?: TaskBlock | null
 }
 
@@ -44,7 +47,9 @@ function getInitialFormState({
   initialEndTime,
   initialStartTime,
   initialType,
-}: Pick<Props, 'categories' | 'editTask' | 'initialDate' | 'initialEndTime' | 'initialStartTime' | 'initialType'>): FormState {
+  initialCategoryId,
+  initialProjectId,
+}: Pick<Props, 'categories' | 'editTask' | 'initialDate' | 'initialEndTime' | 'initialStartTime' | 'initialType' | 'initialCategoryId' | 'initialProjectId'>): FormState {
   if (editTask) {
     return {
       name: editTask.name,
@@ -59,12 +64,12 @@ function getInitialFormState({
     }
   }
 
-  const nextCategoryId = categories[0]?.id ?? ''
+  const nextCategoryId = initialCategoryId ?? categories[0]?.id ?? ''
   const nextType = initialType ?? 'plan'
   return {
     name: '',
     categoryId: nextCategoryId,
-    projectId: '',
+    projectId: initialProjectId ?? '',
     date: initialDate ?? '',
     startTime: initialStartTime ?? '09:00',
     endTime: initialEndTime ?? '10:00',
@@ -76,13 +81,14 @@ function getInitialFormState({
 
 export default function TaskModal({
   open, onClose, onSave, onDelete,
-  categories, projects, initialDate, initialType, initialStartTime, initialEndTime, editTask
+  categories, projects, initialDate, initialType, initialStartTime, initialEndTime,
+  initialCategoryId, initialProjectId, initialProjectTaskId, editTask
 }: Props) {
   if (!open) return null
 
   const modalKey = editTask
     ? `edit-${editTask.id}`
-    : `new-${initialDate ?? ''}-${initialType ?? 'plan'}-${initialStartTime ?? ''}-${initialEndTime ?? ''}-${categories[0]?.id ?? ''}`
+    : `new-${initialDate ?? ''}-${initialType ?? 'plan'}-${initialStartTime ?? ''}-${initialEndTime ?? ''}-${initialCategoryId ?? categories[0]?.id ?? ''}-${initialProjectId ?? ''}-${initialProjectTaskId ?? ''}`
 
   return (
     <TaskModalContent
@@ -92,8 +98,9 @@ export default function TaskModal({
       onSave={onSave}
       categories={categories}
       projects={projects}
-      initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType })}
+      initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, initialCategoryId, initialProjectId })}
       editTask={editTask}
+      projectTaskId={editTask?.projectTaskId ?? initialProjectTaskId}
     />
   )
 }
@@ -106,6 +113,7 @@ function TaskModalContent({
   projects,
   initialState,
   editTask,
+  projectTaskId,
 }: {
   onClose: () => void
   onDelete?: (id: string) => void
@@ -114,6 +122,7 @@ function TaskModalContent({
   projects: Project[]
   initialState: FormState
   editTask?: TaskBlock | null
+  projectTaskId?: string
 }) {
   const [name, setName] = useState(initialState.name)
   const [categoryId, setCategoryId] = useState(initialState.categoryId)
@@ -161,6 +170,7 @@ function TaskModalContent({
       name: name.trim(),
       categoryId,
       projectId: projectId || undefined,
+      projectTaskId,
       date,
       startTime,
       endTime,

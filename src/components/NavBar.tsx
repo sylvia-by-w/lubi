@@ -11,8 +11,8 @@ interface Props {
   onOpenDeadlines: () => void
   deadlines: Deadline[]
   projects: Project[]
-  currentPage: 'weekly' | 'projects' | 'statistics'
-  onChangePage: (page: 'weekly' | 'projects' | 'statistics') => void
+  currentPage: 'weekly' | 'board' | 'projects' | 'statistics'
+  onChangePage: (page: 'weekly' | 'board' | 'projects' | 'statistics') => void
 }
 
 function todayStr() {
@@ -63,6 +63,10 @@ export default function NavBar({
           style={{ ...styles.tab, ...(currentPage === 'weekly' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('weekly')}
         >Weekly View</button>
+        <button
+          style={{ ...styles.tab, ...(currentPage === 'board' ? styles.tabActive : {}) }}
+          onClick={() => onChangePage('board')}
+        >Board</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'projects' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('projects')}

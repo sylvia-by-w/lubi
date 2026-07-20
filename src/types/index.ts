@@ -24,7 +24,8 @@ export type PriorityLevel = 'low' | 'medium' | 'high'
 
 export interface ProjectTask {
   id: string
-  projectId: string
+  projectId?: string
+  categoryId?: string
   title: string
   status: ProjectTaskStatus
   dueDate?: string
@@ -69,9 +70,10 @@ export interface TaskBlock {
   name: string
   categoryId: string
   projectId?: string
-  date: string        // "2026-05-26"
-  startTime: string   // "09:00"
-  endTime: string     // "11:00"
+  projectTaskId?: string
+  date: string
+  startTime: string
+  endTime: string
   type: 'plan' | 'actual'
   energyLevel?: TimeQualityLevel
   valueLevel?: TimeQualityLevel

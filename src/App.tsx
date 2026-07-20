@@ -3,11 +3,12 @@ import { useStore } from './store/useStore'
 import NavBar from './components/NavBar'
 import WeeklyView from './components/WeeklyView'
 import TaskModal from './components/TaskModal'
+import Board from './pages/Board'
 import Projects from './pages/Projects'
 import Statistics from './pages/Statistics'
 import SettingsModal from './components/SettingsModal'
 import DeadlineModal from './components/DeadlineModal'
-import type { TaskBlock } from './types'
+import type { ProjectTask, TaskBlock } from './types'
 import { exportWeeklyExcel } from './utils/excelExport'
 
 interface TaskDefaults {
@@ -15,6 +16,9 @@ interface TaskDefaults {
   type: 'plan' | 'actual'
   startTime: string
   endTime: string
+  categoryId?: string
+  projectId?: string
+  projectTaskId?: string
 }
 
 function getMonday(date: Date): Date {
@@ -36,7 +40,7 @@ export default function App() {
     addDeadline, updateDeadline, deleteDeadline
   } = useStore()
 
-  const [page, setPage] = useState<'weekly' | 'projects' | 'statistics'>('weekly')
+  const [page, setPage] = useState<'weekly' | 'board' | 'projects' | 'statistics'>('weekly')
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [modalOpen, setModalOpen] = useState(false)
   const [taskDefaults, setTaskDefaults] = useState<TaskDefaults | null>(null)
@@ -68,6 +72,25 @@ export default function App() {
     setModalOpen(true)
   }
 
+  const handleLogTime = (task: ProjectTask, date: string, existingBlock?: TaskBlock) => {
+    if (existingBlock) {
+      setEditTask(existingBlock)
+      setTaskDefaults(null)
+    } else {
+      setEditTask(null)
+      setTaskDefaults({
+        date,
+        type: 'actual',
+        startTime: '09:00',
+        endTime: '10:00',
+        categoryId: task.categoryId,
+        projectId: task.projectId,
+        projectTaskId: task.id,
+      })
+    }
+    setModalOpen(true)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <NavBar
@@ -94,6 +117,17 @@ export default function App() {
           deadlines={deadlines}
           onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
+        />
+      ) : page === 'board' ? (
+        <Board
+          projectTasks={projectTasks}
+          categories={categories}
+          projects={projects}
+          tasks={tasks}
+          onAddProjectTask={addProjectTask}
+          onUpdateProjectTask={updateProjectTask}
+          onDeleteProjectTask={deleteProjectTask}
+          onLogTime={handleLogTime}
         />
       ) : page === 'projects' ? (
         <Projects
@@ -123,6 +157,9 @@ export default function App() {
         initialType={taskDefaults?.type}
         initialStartTime={taskDefaults?.startTime}
         initialEndTime={taskDefaults?.endTime}
+        initialCategoryId={taskDefaults?.categoryId}
+        initialProjectId={taskDefaults?.projectId}
+        initialProjectTaskId={taskDefaults?.projectTaskId}
         editTask={editTask}
       />
 
