@@ -252,6 +252,7 @@ export default function Board({
 
           <section style={styles.panel}>
             <h3 style={styles.panelTitle}>按分类</h3>
+            <p style={styles.hint}>每一列对应一个分类(见下方图例)，每个点是一个任务。</p>
             <SwarmChart tasks={projectTasks} categories={categories} projects={projects} />
           </section>
 
@@ -323,13 +324,13 @@ function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; cat
         const inCat = tasks.filter(t => taskCategory(t, categories, projects)?.id === c.id)
         return (
           <g key={c.id}>
+            <line x1={cx} y1={6} x2={cx} y2={H - 10} stroke="var(--border-soft)" strokeDasharray="2 3" />
             {inCat.map((t, i) => {
               const jitterX = ((i * 37) % 17) - 8
               const jitterY = 14 + ((i * 13) % (H - 32))
               const r = t.priority === 'high' ? 5.5 : t.priority === 'low' ? 3.2 : 4.3
               return <circle key={t.id} cx={cx + jitterX} cy={jitterY} r={r} fill={c.color} opacity={0.85} />
             })}
-            <text x={cx} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{c.name}</text>
           </g>
         )
       })}
