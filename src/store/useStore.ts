@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Category, Deadline, HabitItem, HabitLog, Project, ProjectTask, TaskBlock } from '../types'
+import type { Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -9,6 +9,7 @@ const KEYS = {
   deadlines: 'lyubishchev_deadlines',
   habits: 'lyubishchev_habits',
   habitLogs: 'lyubishchev_habit_logs',
+  monthlyNotes: 'lyubishchev_monthly_notes',
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -62,6 +63,9 @@ export function useStore() {
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>(() =>
     load(KEYS.habitLogs, [])
   )
+  const [monthlyNotes, setMonthlyNotes] = useState<MonthlyNote[]>(() =>
+    load(KEYS.monthlyNotes, [])
+  )
 
   useEffect(() => save(KEYS.categories, categories), [categories])
   useEffect(() => save(KEYS.projects, projects), [projects])
@@ -70,6 +74,7 @@ export function useStore() {
   useEffect(() => save(KEYS.deadlines, deadlines), [deadlines])
   useEffect(() => save(KEYS.habits, habits), [habits])
   useEffect(() => save(KEYS.habitLogs, habitLogs), [habitLogs])
+  useEffect(() => save(KEYS.monthlyNotes, monthlyNotes), [monthlyNotes])
 
   const addCategory = (cat: Omit<Category, 'id'>) => {
     const newCat = { ...cat, id: crypto.randomUUID() }
@@ -176,8 +181,16 @@ export function useStore() {
     })
   }
 
+  const upsertMonthlyNote = (month: string, updates: Partial<Omit<MonthlyNote, 'id' | 'month'>>) => {
+    setMonthlyNotes(prev => {
+      const existing = prev.find(n => n.month === month)
+      if (existing) return prev.map(n => n.id === existing.id ? { ...n, ...updates } : n)
+      return [...prev, { id: crypto.randomUUID(), month, ...updates }]
+    })
+  }
+
   const exportAllData = () => {
-    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines, habits, habitLogs }, null, 2)
+    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes }, null, 2)
   }
 
   const importAllData = (json: string) => {
@@ -189,16 +202,18 @@ export function useStore() {
     if (Array.isArray(data.deadlines)) setDeadlines(data.deadlines)
     if (Array.isArray(data.habits)) setHabits(data.habits)
     if (Array.isArray(data.habitLogs)) setHabitLogs(data.habitLogs)
+    if (Array.isArray(data.monthlyNotes)) setMonthlyNotes(data.monthlyNotes)
   }
 
   return {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addTask, updateTask, deleteTask,
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, updateHabit, deleteHabit, toggleHabitLog,
+    upsertMonthlyNote,
     exportAllData, importAllData,
   }
 }

@@ -11,8 +11,8 @@ interface Props {
   onOpenDeadlines: () => void
   deadlines: Deadline[]
   projects: Project[]
-  currentPage: 'weekly' | 'board' | 'projects' | 'statistics'
-  onChangePage: (page: 'weekly' | 'board' | 'projects' | 'statistics') => void
+  currentPage: 'weekly' | 'board' | 'month' | 'projects' | 'statistics'
+  onChangePage: (page: 'weekly' | 'board' | 'month' | 'projects' | 'statistics') => void
 }
 
 function todayStr() {
@@ -67,6 +67,10 @@ export default function NavBar({
           style={{ ...styles.tab, ...(currentPage === 'board' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('board')}
         >看板</button>
+        <button
+          style={{ ...styles.tab, ...(currentPage === 'month' ? styles.tabActive : {}) }}
+          onClick={() => onChangePage('month')}
+        >月计划</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'projects' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('projects')}

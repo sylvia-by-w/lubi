@@ -4,6 +4,7 @@ import NavBar from './components/NavBar'
 import WeeklyView from './components/WeeklyView'
 import TaskModal from './components/TaskModal'
 import Board from './pages/Board'
+import MonthPlan from './pages/MonthPlan'
 import Projects from './pages/Projects'
 import Statistics from './pages/Statistics'
 import SettingsModal from './components/SettingsModal'
@@ -32,17 +33,17 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes,
     addTask, updateTask, deleteTask,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addDeadline, updateDeadline, deleteDeadline,
-    addHabit, deleteHabit, toggleHabitLog,
+    addHabit, deleteHabit, toggleHabitLog, upsertMonthlyNote,
     exportAllData, importAllData
   } = useStore()
 
-  const [page, setPage] = useState<'weekly' | 'board' | 'projects' | 'statistics'>('weekly')
+  const [page, setPage] = useState<'weekly' | 'board' | 'month' | 'projects' | 'statistics'>('weekly')
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [modalOpen, setModalOpen] = useState(false)
   const [taskDefaults, setTaskDefaults] = useState<TaskDefaults | null>(null)
@@ -135,6 +136,15 @@ export default function App() {
           onAddHabit={addHabit}
           onDeleteHabit={deleteHabit}
           onToggleHabitLog={toggleHabitLog}
+        />
+      ) : page === 'month' ? (
+        <MonthPlan
+          habits={habits}
+          habitLogs={habitLogs}
+          categories={categories}
+          monthlyNotes={monthlyNotes}
+          onToggleHabitLog={toggleHabitLog}
+          onUpsertMonthlyNote={upsertMonthlyNote}
         />
       ) : page === 'projects' ? (
         <Projects

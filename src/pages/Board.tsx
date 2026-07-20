@@ -58,6 +58,17 @@ function taskCategory(task: ProjectTask, categories: Category[], projects: Proje
   const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
   return project ? categories.find(c => c.id === project.categoryId) : undefined
 }
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+function daysElapsedInMonth(d: Date) {
+  const today = startOfToday()
+  if (today.getFullYear() !== d.getFullYear() || today.getMonth() !== d.getMonth()) {
+    // viewing a month that isn't the current one: treat whole month as elapsed
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  }
+  return today.getDate()
+}
 function cycleTimeDays(task: ProjectTask): number | null {
   if (task.status !== 'done' || !task.completedAt) return null
   const start = new Date(task.createdAt).getTime()
@@ -96,6 +107,24 @@ export default function Board({
 
   const activeHabits = habits.filter(h => !h.archived)
   const actualEntries = tasks.filter(t => t.type === 'actual')
+
+  const monthStart = startOfMonth(startOfToday())
+  const elapsedDays = daysElapsedInMonth(monthStart)
+  const habitMonthStats = (habitId: string) => {
+    let done = 0
+    for (let day = 1; day <= elapsedDays; day++) {
+      const ds = fmtDate(new Date(monthStart.getFullYear(), monthStart.getMonth(), day))
+      if (habitLogs.some(l => l.habitId === habitId && l.date === ds)) done++
+    }
+    return { done, total: elapsedDays, pct: elapsedDays ? done / elapsedDays : 0 }
+  }
+  const overallHabitStats = (() => {
+    if (activeHabits.length === 0) return null
+    let done = 0
+    const total = activeHabits.length * elapsedDays
+    activeHabits.forEach(h => { done += habitMonthStats(h.id).done })
+    return { done, total, pct: total ? done / total : 0 }
+  })()
 
   const handleAddTask = () => {
     if (!form.title.trim() || !form.categoryId) return
@@ -156,6 +185,7 @@ export default function Board({
           <p style={styles.subtitle}>所有任务都在这里管理。实际花费的时间仍会同步到周视图和统计页。</p>
         </div>
         <div style={styles.summaryRow}>
+          {overallHabitStats && <MonthDonut pct={overallHabitStats.pct} />}
           <SummaryMetric label="待办" value={String(todoCount)} />
           <SummaryMetric label="进行中" value={String(inProgressCount)} />
           <SummaryMetric label="已完成" value={String(doneCount)} />
@@ -246,13 +276,21 @@ export default function Board({
               <div style={{ ...styles.taskList, marginTop: 10 }}>
                 {activeHabits.map(h => {
                   const cat = h.categoryId ? categories.find(c => c.id === h.categoryId) : undefined
+                  const stats = habitMonthStats(h.id)
+                  const barColor = cat?.color ?? 'var(--primary)'
                   return (
-                    <div key={h.id} style={styles.taskRow}>
-                      <span style={{ ...styles.dot, background: cat?.color ?? 'var(--text-muted)' }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={styles.taskName}>{h.name}</div>
+                    <div key={h.id} style={{ ...styles.taskRow, flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ ...styles.dot, background: barColor }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={styles.taskName}>{h.name}</div>
+                        </div>
+                        <span style={styles.habitStatsLabel}>{stats.done}/{stats.total} · {Math.round(stats.pct * 100)}%</span>
+                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="删除习惯">x</button>
                       </div>
-                      <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="删除习惯">x</button>
+                      <div style={styles.habitBarTrack}>
+                        <div style={{ ...styles.habitBarFill, width: `${Math.round(stats.pct * 100)}%`, background: barColor }} />
+                      </div>
                     </div>
                   )
                 })}
@@ -481,6 +519,28 @@ function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; cat
   )
 }
 
+function MonthDonut({ pct }: { pct: number }) {
+  const r = 19
+  const c = 2 * Math.PI * r
+  const clamped = Math.max(0, Math.min(1, pct))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="var(--border-soft)" strokeWidth={6} />
+        <circle
+          cx="24" cy="24" r={r} fill="none" stroke="var(--primary)" strokeWidth={6}
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * clamped}
+          transform="rotate(-90 24 24)"
+        />
+        <text x="24" y="28" textAnchor="middle" fontSize="11" fontWeight={700} fill="var(--text-primary)">
+          {Math.round(clamped * 100)}%
+        </text>
+      </svg>
+      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700 }}>本月习惯</span>
+    </div>
+  )
+}
+
 function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.summaryMetric}>
@@ -540,4 +600,7 @@ const styles: Record<string, CSSProperties> = {
   todayCol: { background: '#fffbe6' },
   chartBox: { width: '100%', height: 140, display: 'block' },
   legendRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-primary)' },
+  habitStatsLabel: { fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' },
+  habitBarTrack: { height: 6, background: 'var(--surface-muted)', borderRadius: 3, overflow: 'hidden' },
+  habitBarFill: { height: '100%', borderRadius: 3 },
 }

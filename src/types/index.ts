@@ -93,6 +93,13 @@ export interface HabitLog {
   date: string
 }
 
+export interface MonthlyNote {
+  id: string
+  month: string
+  quote?: string
+  reminder?: string
+}
+
 export interface AppState {
   categories: Category[]
   projects: Project[]
@@ -101,4 +108,5 @@ export interface AppState {
   deadlines: Deadline[]
   habits: HabitItem[]
   habitLogs: HabitLog[]
+  monthlyNotes: MonthlyNote[]
 }
