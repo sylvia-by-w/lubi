@@ -37,7 +37,8 @@ export default function App() {
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
-    addDeadline, updateDeadline, deleteDeadline
+    addDeadline, updateDeadline, deleteDeadline,
+    exportAllData, importAllData
   } = useStore()
 
   const [page, setPage] = useState<'weekly' | 'board' | 'projects' | 'statistics'>('weekly')
@@ -172,6 +173,8 @@ export default function App() {
         onDeleteCategory={deleteCategory}
         onAddProject={addProject}
         onDeleteProject={deleteProject}
+        onExportAllData={exportAllData}
+        onImportAllData={importAllData}
       />
 
       <DeadlineModal

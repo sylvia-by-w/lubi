@@ -144,6 +144,19 @@ export function useStore() {
     setDeadlines(prev => prev.filter(d => d.id !== id))
   }
 
+  const exportAllData = () => {
+    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines }, null, 2)
+  }
+
+  const importAllData = (json: string) => {
+    const data = JSON.parse(json)
+    if (Array.isArray(data.categories)) setCategories(data.categories)
+    if (Array.isArray(data.projects)) setProjects(data.projects)
+    if (Array.isArray(data.projectTasks)) setProjectTasks(data.projectTasks.map(normalizeProjectTask))
+    if (Array.isArray(data.tasks)) setTasks(data.tasks)
+    if (Array.isArray(data.deadlines)) setDeadlines(data.deadlines)
+  }
+
   return {
     categories, projects, projectTasks, tasks, deadlines,
     addCategory, deleteCategory,
@@ -151,5 +164,6 @@ export function useStore() {
     addProjectTask, updateProjectTask, deleteProjectTask,
     addTask, updateTask, deleteTask,
     addDeadline, updateDeadline, deleteDeadline,
+    exportAllData, importAllData,
   }
 }

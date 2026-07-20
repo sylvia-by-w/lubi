@@ -10,6 +10,8 @@ interface Props {
   onDeleteCategory: (id: string) => void
   onAddProject: (proj: Omit<Project, 'id'>) => void
   onDeleteProject: (id: string) => void
+  onExportAllData: () => string
+  onImportAllData: (json: string) => void
 }
 
 const PRESET_COLORS = [
@@ -21,13 +23,43 @@ const PRESET_COLORS = [
 export default function SettingsModal({
   open, onClose, categories, projects,
   onAddCategory, onDeleteCategory,
-  onAddProject, onDeleteProject
+  onAddProject, onDeleteProject,
+  onExportAllData, onImportAllData,
 }: Props) {
   const [catName, setCatName] = useState('')
   const [catColor, setCatColor] = useState(PRESET_COLORS[0])
   const [projName, setProjName] = useState('')
   const [projCategoryId, setProjCategoryId] = useState(categories[0]?.id ?? '')
-  const [tab, setTab] = useState<'categories' | 'projects'>('categories')
+  const [tab, setTab] = useState<'categories' | 'projects' | 'backup'>('categories')
+  const [importMessage, setImportMessage] = useState('')
+
+  const handleExport = () => {
+    const json = onExportAllData()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `lubi-backup-${stamp}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        onImportAllData(String(reader.result))
+        setImportMessage('Data imported successfully.')
+      } catch {
+        setImportMessage('Import failed - the file is not valid backup JSON.')
+      }
+    }
+    reader.readAsText(file)
+    event.target.value = ''
+  }
 
   if (!open) return null
 
@@ -73,6 +105,10 @@ export default function SettingsModal({
             style={{ ...styles.tab, ...(tab === 'projects' ? styles.tabActive : {}) }}
             onClick={() => setTab('projects')}
           >Projects</button>
+          <button
+            style={{ ...styles.tab, ...(tab === 'backup' ? styles.tabActive : {}) }}
+            onClick={() => setTab('backup')}
+          >Backup</button>
         </div>
 
         {tab === 'categories' && (
@@ -164,6 +200,23 @@ export default function SettingsModal({
               ))}
               {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No projects yet</p>}
             </div>
+          </div>
+        )}
+
+        {tab === 'backup' && (
+          <div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
+              All your data (categories, projects, tasks, time blocks, deadlines) lives in this browser only.
+              Moving to a new domain or clearing browser data starts fresh unless you back up first.
+            </p>
+            <button onClick={handleExport} style={{ ...styles.addBtn, marginBottom: 12 }}>Export all data</button>
+            <div>
+              <label style={{ ...styles.addBtn, display: 'inline-block', cursor: 'pointer', background: 'var(--surface-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+                Import all data
+                <input type="file" accept="application/json" onChange={handleImportFile} style={{ display: 'none' }} />
+              </label>
+            </div>
+            {importMessage && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{importMessage}</p>}
           </div>
         )}
       </div>
