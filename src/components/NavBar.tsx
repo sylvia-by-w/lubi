@@ -26,9 +26,9 @@ function daysUntil(date: string) {
 }
 
 function deadlineLabel(days: number) {
-  if (days === 0) return 'Today'
-  if (days === 1) return '1 day left'
-  return `${days} days left`
+  if (days === 0) return '今天'
+  if (days === 1) return '还剩1天'
+  return `还剩${days}天`
 }
 
 export default function NavBar({
@@ -45,8 +45,8 @@ export default function NavBar({
   onChangePage,
 }: Props) {
   const days = getWeekDays(weekStart)
-  const startLabel = days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  const endLabel = days[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const startLabel = days[0].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  const endLabel = days[6].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
   const nearestDeadline = [...deadlines]
     .filter(deadline => deadline.date >= todayStr())
     .sort((a, b) => `${a.date}T${a.time ?? '00:00'}`.localeCompare(`${b.date}T${b.time ?? '00:00'}`))[0]
@@ -62,26 +62,26 @@ export default function NavBar({
         <button
           style={{ ...styles.tab, ...(currentPage === 'weekly' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('weekly')}
-        >Weekly View</button>
+        >周视图</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'board' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('board')}
-        >Board</button>
+        >看板</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'projects' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('projects')}
-        >Projects</button>
+        >项目</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'statistics' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('statistics')}
-        >Statistics</button>
+        >统计</button>
       </div>
 
       <div style={styles.right}>
         <button style={styles.deadlineBlock} onClick={onOpenDeadlines}>
           {nearestDeadline ? (
             <>
-              <span style={styles.deadlineKicker}>Deadline</span>
+              <span style={styles.deadlineKicker}>截止日期</span>
               <span style={styles.deadlineTitle}>{nearestDeadline.title}</span>
               <span style={styles.deadlineMeta}>
                 {deadlineLabel(daysUntil(nearestDeadline.date))}
@@ -90,18 +90,18 @@ export default function NavBar({
             </>
           ) : (
             <>
-              <span style={styles.deadlineKicker}>Deadline</span>
-              <span style={styles.deadlineTitle}>No upcoming deadline</span>
-              <span style={styles.deadlineMeta}>+ Add</span>
+              <span style={styles.deadlineKicker}>截止日期</span>
+              <span style={styles.deadlineTitle}>暂无即将到来的截止日期</span>
+              <span style={styles.deadlineMeta}>+ 添加</span>
             </>
           )}
         </button>
         <button style={styles.weekBtn} onClick={onPrevWeek}>&#8249;</button>
         <span style={styles.weekLabel}>{startLabel} - {endLabel}</span>
         <button style={styles.weekBtn} onClick={onNextWeek}>&#8250;</button>
-        <button style={styles.settingsBtn} onClick={onExportWeeklyExcel}>Export</button>
-        <button style={styles.settingsBtn} onClick={onOpenSettings}>Settings</button>
-        <button style={styles.addBtn} onClick={onAddTask}>+ Add Task</button>
+        <button style={styles.settingsBtn} onClick={onExportWeeklyExcel}>导出</button>
+        <button style={styles.settingsBtn} onClick={onOpenSettings}>设置</button>
+        <button style={styles.addBtn} onClick={onAddTask}>+ 添加任务</button>
       </div>
     </div>
   )
@@ -234,6 +234,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 800,
     cursor: 'pointer',
-    boxShadow: '0 8px 18px rgba(79, 70, 229, 0.22)',
+    boxShadow: '0 8px 18px rgba(43, 43, 43, 0.22)',
   },
 }

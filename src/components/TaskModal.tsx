@@ -184,33 +184,33 @@ function TaskModalContent({
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
-        <h2 style={styles.title}>{editTask ? 'Edit Task' : 'Add Task'}</h2>
+        <h2 style={styles.title}>{editTask ? '编辑任务' : '添加任务'}</h2>
 
-        <label style={styles.label}>Task Name</label>
+        <label style={styles.label}>任务名称</label>
         <input
           style={styles.input}
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="e.g. Deep Work"
+          placeholder="例如：深度工作"
         />
 
-        <label style={styles.label}>Category</label>
+        <label style={styles.label}>分类</label>
         <select style={styles.input} value={categoryId} onChange={e => handleCategoryChange(e.target.value)}>
-          <option value="">Select category</option>
+          <option value="">选择分类</option>
           {categories.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
 
-        <label style={styles.label}>Project (optional)</label>
+        <label style={styles.label}>项目(可选)</label>
         <select style={styles.input} value={projectId} onChange={e => handleProjectChange(e.target.value)}>
-          <option value="">None</option>
+          <option value="">无</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
 
-        <label style={styles.label}>Date</label>
+        <label style={styles.label}>日期</label>
         <input
           style={styles.input}
           type="date"
@@ -220,35 +220,35 @@ function TaskModalContent({
 
         <div style={styles.row}>
           <div style={{ flex: 1 }}>
-            <label style={styles.label}>Start</label>
+            <label style={styles.label}>开始</label>
             <input style={styles.input} type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={styles.label}>End</label>
+            <label style={styles.label}>结束</label>
             <input style={styles.input} type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
           </div>
         </div>
 
-        <label style={styles.label}>Type</label>
+        <label style={styles.label}>类型</label>
         <div style={styles.row}>
           <button
             style={{ ...styles.typeBtn, ...(type === 'plan' ? styles.typeBtnActive : {}) }}
             onClick={() => handleTypeChange('plan')}
-          >Plan</button>
+          >计划</button>
           <button
             style={{ ...styles.typeBtn, ...(type === 'actual' ? styles.typeBtnActive : {}) }}
             onClick={() => handleTypeChange('actual')}
-          >Actual</button>
+          >实际</button>
         </div>
 
         {type === 'actual' && (
           <div style={styles.qualityGrid}>
             <div>
-              <label style={styles.label}>Energy</label>
+              <label style={styles.label}>精力</label>
               <QualitySelector value={energyLevel} onChange={setEnergyLevel} />
             </div>
             <div>
-              <label style={styles.label}>Value</label>
+              <label style={styles.label}>价值</label>
               <QualitySelector value={valueLevel} onChange={setValueLevel} />
             </div>
           </div>
@@ -256,10 +256,10 @@ function TaskModalContent({
 
         <div style={{ ...styles.row, marginTop: 24 }}>
           {editTask && onDelete && (
-            <button style={styles.deleteBtn} onClick={() => { onDelete(editTask.id); onClose() }}>Delete</button>
+            <button style={styles.deleteBtn} onClick={() => { onDelete(editTask.id); onClose() }}>删除</button>
           )}
-          <button style={styles.cancelBtn} onClick={onClose}>Cancel</button>
-          <button style={styles.saveBtn} onClick={handleSave}>Save</button>
+          <button style={styles.cancelBtn} onClick={onClose}>取消</button>
+          <button style={styles.saveBtn} onClick={handleSave}>保存</button>
         </div>
       </div>
     </div>
@@ -274,9 +274,9 @@ function QualitySelector({
   onChange: (value: TimeQualityLevel | '') => void
 }) {
   const levels: { value: TimeQualityLevel; label: string }[] = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
+    { value: 'low', label: '低' },
+    { value: 'medium', label: '中' },
+    { value: 'high', label: '高' },
   ]
 
   return (
@@ -329,7 +329,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', fontWeight: 700,
   },
   qualityBtnActive: {
-    background: 'var(--primary-soft)', color: 'var(--primary)', border: '1px solid #c7d2fe',
+    background: 'var(--primary-soft)', color: 'var(--primary)', border: '1px solid var(--border)',
   },
   saveBtn: {
     flex: 1, padding: '10px 0', borderRadius: 'var(--radius-sm)', border: 'none',

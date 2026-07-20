@@ -15,7 +15,7 @@ interface Props {
 
 const RANGE_DAYS = 10
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
-const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: 'To do', in_progress: 'In progress', done: 'Done' }
+const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
 
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -39,6 +39,12 @@ function priorityColor(priority?: PriorityLevel) {
   if (priority === 'medium') return 'var(--warning)'
   if (priority === 'low') return 'var(--success)'
   return 'var(--text-muted)'
+}
+function priorityLabel(priority?: PriorityLevel) {
+  if (priority === 'high') return '高'
+  if (priority === 'medium') return '中'
+  if (priority === 'low') return '低'
+  return '无优先级'
 }
 function taskCategory(task: ProjectTask, categories: Category[], projects: Project[]): Category | undefined {
   if (task.categoryId) return categories.find(c => c.id === task.categoryId)
@@ -108,52 +114,52 @@ export default function Board({
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Board</h1>
-          <p style={styles.subtitle}>All your tasks in one place. Time actually spent still flows into Weekly View and Statistics.</p>
+          <h1 style={styles.title}>看板</h1>
+          <p style={styles.subtitle}>所有任务都在这里管理。实际花费的时间仍会同步到周视图和统计页。</p>
         </div>
         <div style={styles.summaryRow}>
-          <SummaryMetric label="To do" value={String(todoCount)} />
-          <SummaryMetric label="In progress" value={String(inProgressCount)} />
-          <SummaryMetric label="Done" value={String(doneCount)} />
+          <SummaryMetric label="待办" value={String(todoCount)} />
+          <SummaryMetric label="进行中" value={String(inProgressCount)} />
+          <SummaryMetric label="已完成" value={String(doneCount)} />
         </div>
       </div>
 
       <div style={styles.columns}>
         <div style={styles.leftCol}>
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Add task</h3>
+            <h3 style={styles.panelTitle}>添加任务</h3>
             <input
               style={styles.input}
-              placeholder="Task name"
+              placeholder="任务名称"
               value={form.title}
               onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && handleAddTask()}
             />
             <select style={styles.input} value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))}>
-              <option value="">Select category</option>
+              <option value="">选择分类</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select style={styles.input} value={form.projectId} onChange={e => setForm(prev => ({ ...prev, projectId: e.target.value }))}>
-              <option value="">No project</option>
+              <option value="">不挂项目</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <div style={styles.row}>
               <input style={{ ...styles.input, flex: 1 }} type="date" value={form.dueDate} onChange={e => setForm(prev => ({ ...prev, dueDate: e.target.value }))} />
               <select style={{ ...styles.input, width: 120 }} value={form.priority} onChange={e => setForm(prev => ({ ...prev, priority: e.target.value as PriorityLevel }))}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
               </select>
             </div>
-            <button style={styles.addBtn} onClick={handleAddTask}>+ Add task</button>
+            <button style={styles.addBtn} onClick={handleAddTask}>+ 添加任务</button>
           </section>
 
           <section style={styles.panel}>
             <div style={styles.sectionHeader}>
-              <h3 style={styles.panelTitle}>Task list</h3>
+              <h3 style={styles.panelTitle}>任务清单</h3>
               <label style={styles.hideDoneLabel}>
                 <input type="checkbox" checked={hideDone} onChange={e => setHideDone(e.target.checked)} />
-                Hide done
+                隐藏已完成
               </label>
             </div>
             <div style={styles.taskList}>
@@ -166,18 +172,18 @@ export default function Board({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }}>{task.title}</div>
                       <div style={styles.taskMeta}>
-                        {cat?.name ?? 'No category'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · due ${task.dueDate}` : ''}
+                        {cat?.name ?? '无分类'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · 截止 ${task.dueDate}` : ''}
                       </div>
                     </div>
-                    <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={task.priority ?? 'no priority'} />
+                    <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={priorityLabel(task.priority)} />
                     <button style={{ ...styles.statusPill, ...statusTone(task.status) }} onClick={() => toggleStatus(task)}>
                       {STATUS_LABEL[task.status]}
                     </button>
-                    <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label="Delete task">x</button>
+                    <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label="删除任务">x</button>
                   </div>
                 )
               })}
-              {visibleTasks.length === 0 && <p style={styles.emptyText}>No tasks yet — add one above.</p>}
+              {visibleTasks.length === 0 && <p style={styles.emptyText}>暂无任务，从上面添加一个吧。</p>}
             </div>
           </section>
         </div>
@@ -185,17 +191,17 @@ export default function Board({
         <div style={styles.midCol}>
           <section style={styles.panel}>
             <div style={styles.sectionHeader}>
-              <h3 style={styles.panelTitle}>Progress grid</h3>
+              <h3 style={styles.panelTitle}>进度网格</h3>
               <div style={styles.row}>
-                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, -RANGE_DAYS))}>&#8249; prev</button>
-                <button style={styles.navBtn} onClick={() => setRangeStart(startOfToday())}>today</button>
-                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, RANGE_DAYS))}>next &#8250;</button>
+                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, -RANGE_DAYS))}>&#8249; 上一页</button>
+                <button style={styles.navBtn} onClick={() => setRangeStart(startOfToday())}>今天</button>
+                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, RANGE_DAYS))}>下一页 &#8250;</button>
               </div>
             </div>
-            <p style={styles.hint}>Click a status pill to move a task along. Click a day cell to log the exact time you spent (opens the same time-block editor as Weekly View).</p>
+            <p style={styles.hint}>点击状态胶囊切换任务进度。点击某一天的格子可以记录当天实际花的时间(和周视图里同一个时间块编辑器)。</p>
             <div style={styles.gridWrap}>
               <div style={{ ...styles.grid, gridTemplateColumns: `160px repeat(${RANGE_DAYS}, 40px)` }}>
-                <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>Task</div>
+                <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>任务</div>
                 {days.map(d => {
                   const ds = fmtDate(d)
                   return (
@@ -216,8 +222,8 @@ export default function Board({
                         const minutes = entries.reduce((sum, e) => sum + Math.max(0, timeToMinutes(e.endTime) - timeToMinutes(e.startTime)), 0)
                         const opacity = minutes === 0 ? 0 : Math.min(1, 0.35 + minutes / 150)
                         const title = entries.length === 0
-                          ? 'No time logged - click to add'
-                          : `${entries.map(e => `${e.startTime}-${e.endTime}`).join(', ')} (${(minutes / 60).toFixed(1)}h)`
+                          ? '还没有记录时间 - 点击添加'
+                          : `${entries.map(e => `${e.startTime}-${e.endTime}`).join(', ')}(共${(minutes / 60).toFixed(1)}小时)`
                         return (
                           <div
                             key={task.id + ds}
@@ -239,19 +245,19 @@ export default function Board({
 
         <div style={styles.rightCol}>
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Cycle time</h3>
-            <p style={styles.hint}>Days from created to done, per finished task.</p>
+            <h3 style={styles.panelTitle}>周期时间</h3>
+            <p style={styles.hint}>每个已完成任务从创建到完成的天数。</p>
             <CycleTimeChart tasks={projectTasks} categories={categories} projects={projects} />
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>By category</h3>
+            <h3 style={styles.panelTitle}>按分类</h3>
             <SwarmChart tasks={projectTasks} categories={categories} projects={projects} />
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Category legend</h3>
-            <p style={styles.hint}>Colors follow Settings - add or edit categories there.</p>
+            <h3 style={styles.panelTitle}>分类图例</h3>
+            <p style={styles.hint}>颜色跟随"设置"里的分类颜色。</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {categories.map(c => (
                 <div key={c.id} style={styles.legendRow}>
@@ -263,11 +269,11 @@ export default function Board({
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Priority legend</h3>
+            <h3 style={styles.panelTitle}>优先级图例</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--danger)' }} />High</div>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--warning)' }} />Medium</div>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--success)' }} />Low</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--danger)' }} />高</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--warning)' }} />中</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--success)' }} />低</div>
             </div>
           </section>
         </div>
@@ -284,7 +290,7 @@ function CycleTimeChart({ tasks, categories, projects }: { tasks: ProjectTask[];
 
   const W = 240, H = 140, pad = 26
   if (points.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No completed tasks yet</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无已完成任务数据</div>
   }
   const maxCycle = Math.max(3, ...points.map(p => p.cycle))
   const n = ordered.length
@@ -306,7 +312,7 @@ function CycleTimeChart({ tasks, categories, projects }: { tasks: ProjectTask[];
 function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; categories: Category[]; projects: Project[] }) {
   const W = 240, H = 130
   if (categories.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No categories yet</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无分类</div>
   }
   const colW = W / categories.length
 

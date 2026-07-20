@@ -124,36 +124,36 @@ export default function DeadlineModal({
     <div style={styles.overlay}>
       <div style={styles.modal}>
         <div style={styles.header}>
-          <h2 style={styles.title}>Deadlines</h2>
+          <h2 style={styles.title}>截止日期</h2>
           <button onClick={onClose} style={styles.closeBtn}>x</button>
         </div>
 
-        <button style={styles.addBtn} onClick={startAdd}>+ Add Deadline</button>
+        <button style={styles.addBtn} onClick={startAdd}>+ 添加截止日期</button>
 
         {showForm && (
           <div style={styles.formCard}>
-            <label style={styles.label}>Title</label>
+            <label style={styles.label}>标题</label>
             <input
               style={styles.input}
               value={form.title}
               onChange={e => patchForm({ title: e.target.value })}
-              placeholder="Exam, project due date, application..."
+              placeholder="考试、项目截止、申请..."
             />
 
             <div style={styles.row}>
               <div style={{ flex: 1 }}>
-                <label style={styles.label}>Date</label>
+                <label style={styles.label}>日期</label>
                 <input style={styles.input} type="date" value={form.date} onChange={e => patchForm({ date: e.target.value })} />
               </div>
               <div style={{ width: 120 }}>
-                <label style={styles.label}>Time</label>
+                <label style={styles.label}>时间</label>
                 <input style={styles.input} type="time" value={form.time} onChange={e => patchForm({ time: e.target.value })} />
               </div>
             </div>
 
-            <label style={styles.label}>Project</label>
+            <label style={styles.label}>项目</label>
             <select style={styles.input} value={form.projectId} onChange={e => handleProjectChange(e.target.value)}>
-              <option value="">None</option>
+              <option value="">无</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
@@ -161,53 +161,53 @@ export default function DeadlineModal({
 
             <div style={styles.row}>
               <div style={{ flex: 1 }}>
-                <label style={styles.label}>Category</label>
+                <label style={styles.label}>分类</label>
                 <select style={styles.input} value={form.categoryId} onChange={e => patchForm({ categoryId: e.target.value })}>
-                  <option value="">None</option>
+                  <option value="">无</option>
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
                 </select>
               </div>
               <div style={{ width: 130 }}>
-                <label style={styles.label}>Priority</label>
+                <label style={styles.label}>优先级</label>
                 <select style={styles.input} value={form.priority} onChange={e => patchForm({ priority: e.target.value as PriorityLevel | '' })}>
-                  <option value="">None</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="">无</option>
+                  <option value="low">低</option>
+                  <option value="medium">中</option>
+                  <option value="high">高</option>
                 </select>
               </div>
             </div>
 
-            <label style={styles.label}>Note</label>
+            <label style={styles.label}>备注</label>
             <textarea
               style={{ ...styles.input, minHeight: 70, resize: 'vertical' }}
               value={form.note}
               onChange={e => patchForm({ note: e.target.value })}
-              placeholder="Optional context"
+              placeholder="补充说明(可选)"
             />
 
             <div style={styles.actions}>
-              <button style={styles.cancelBtn} onClick={cancelForm}>Cancel</button>
-              <button style={styles.saveBtn} onClick={saveForm}>{editingId ? 'Save' : 'Add'}</button>
+              <button style={styles.cancelBtn} onClick={cancelForm}>取消</button>
+              <button style={styles.saveBtn} onClick={saveForm}>{editingId ? '保存' : '添加'}</button>
             </div>
           </div>
         )}
 
         <DeadlineList
-          title="Upcoming Deadlines"
+          title="即将到来"
           deadlines={upcoming}
           projects={projects}
           categories={categories}
-          emptyText="No upcoming deadline"
+          emptyText="暂无即将到来的截止日期"
           onEdit={startEdit}
           onDelete={onDeleteDeadline}
         />
 
         {past.length > 0 && (
           <DeadlineList
-            title="Past"
+            title="已过期"
             deadlines={past}
             projects={projects}
             categories={categories}
@@ -241,7 +241,7 @@ function DeadlineList({
     <section style={styles.section}>
       <h3 style={styles.sectionTitle}>{title}</h3>
       {deadlines.length === 0 ? (
-        <p style={styles.empty}>{emptyText ?? 'No deadlines'}</p>
+        <p style={styles.empty}>{emptyText ?? '暂无截止日期'}</p>
       ) : (
         <div style={styles.list}>
           {deadlines.map(deadline => {
@@ -252,7 +252,7 @@ function DeadlineList({
                 <div style={styles.itemMain}>
                   <div style={styles.itemTitleRow}>
                     <span style={styles.itemTitle}>{deadline.title}</span>
-                    {deadline.priority && <span style={{ ...styles.priority, ...priorityStyle(deadline.priority) }}>{deadline.priority}</span>}
+                    {deadline.priority && <span style={{ ...styles.priority, ...priorityStyle(deadline.priority) }}>{priorityText(deadline.priority)}</span>}
                   </div>
                   <div style={styles.meta}>
                     <span>{deadline.date}{deadline.time ? ` ${deadline.time}` : ''}</span>
@@ -267,8 +267,8 @@ function DeadlineList({
                   {deadline.note && <p style={styles.note}>{deadline.note}</p>}
                 </div>
                 <div style={styles.itemActions}>
-                  <button style={styles.linkBtn} onClick={() => onEdit(deadline)}>Edit</button>
-                  <button style={styles.linkBtnDanger} onClick={() => onDelete(deadline.id)}>Delete</button>
+                  <button style={styles.linkBtn} onClick={() => onEdit(deadline)}>编辑</button>
+                  <button style={styles.linkBtnDanger} onClick={() => onDelete(deadline.id)}>删除</button>
                 </div>
               </div>
             )
@@ -277,6 +277,12 @@ function DeadlineList({
       )}
     </section>
   )
+}
+
+function priorityText(priority: PriorityLevel) {
+  if (priority === 'high') return '高'
+  if (priority === 'medium') return '中'
+  return '低'
 }
 
 function priorityStyle(priority: PriorityLevel): React.CSSProperties {

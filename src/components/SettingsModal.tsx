@@ -52,9 +52,9 @@ export default function SettingsModal({
     reader.onload = () => {
       try {
         onImportAllData(String(reader.result))
-        setImportMessage('Data imported successfully.')
+        setImportMessage('数据导入成功。')
       } catch {
-        setImportMessage('Import failed - the file is not valid backup JSON.')
+        setImportMessage('导入失败——这个文件不是有效的备份 JSON。')
       }
     }
     reader.readAsText(file)
@@ -92,7 +92,7 @@ export default function SettingsModal({
     <div style={styles.overlay}>
       <div style={styles.modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Settings</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>设置</h2>
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
         </div>
 
@@ -100,15 +100,15 @@ export default function SettingsModal({
           <button
             style={{ ...styles.tab, ...(tab === 'categories' ? styles.tabActive : {}) }}
             onClick={() => setTab('categories')}
-          >Categories</button>
+          >分类</button>
           <button
             style={{ ...styles.tab, ...(tab === 'projects' ? styles.tabActive : {}) }}
             onClick={() => setTab('projects')}
-          >Projects</button>
+          >项目</button>
           <button
             style={{ ...styles.tab, ...(tab === 'backup' ? styles.tabActive : {}) }}
             onClick={() => setTab('backup')}
-          >Backup</button>
+          >备份数据</button>
         </div>
 
         {tab === 'categories' && (
@@ -116,12 +116,12 @@ export default function SettingsModal({
             <div style={styles.addRow}>
               <input
                 style={{ ...styles.input, flex: 1 }}
-                placeholder="Category name"
+                placeholder="分类名称"
                 value={catName}
                 onChange={e => setCatName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddCat()}
               />
-              <button onClick={handleAddCat} style={styles.addBtn}>Add</button>
+              <button onClick={handleAddCat} style={styles.addBtn}>添加</button>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
               {PRESET_COLORS.map(c => (
@@ -156,7 +156,7 @@ export default function SettingsModal({
                   <button onClick={() => onDeleteCategory(cat.id)} style={styles.deleteBtn}>✕</button>
                 </div>
               ))}
-              {categories.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No categories yet</p>}
+              {categories.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>暂无分类</p>}
             </div>
           </div>
         )}
@@ -166,7 +166,7 @@ export default function SettingsModal({
             <div style={styles.addRow}>
               <input
                 style={{ ...styles.input, flex: 1 }}
-                placeholder="Project name"
+                placeholder="项目名称"
                 value={projName}
                 onChange={e => setProjName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddProj()}
@@ -176,12 +176,12 @@ export default function SettingsModal({
                 value={selectedProjCategoryId}
                 onChange={e => setProjCategoryId(e.target.value)}
               >
-                <option value="">Category</option>
+                <option value="">分类</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              <button onClick={handleAddProj} style={styles.addBtn}>Add</button>
+              <button onClick={handleAddProj} style={styles.addBtn}>添加</button>
             </div>
             <div style={styles.list}>
               {projectsByCategory.map(({ cat, projects }) => (
@@ -198,7 +198,7 @@ export default function SettingsModal({
                   ))}
                 </div>
               ))}
-              {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No projects yet</p>}
+              {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>暂无项目</p>}
             </div>
           </div>
         )}
@@ -206,13 +206,13 @@ export default function SettingsModal({
         {tab === 'backup' && (
           <div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
-              All your data (categories, projects, tasks, time blocks, deadlines) lives in this browser only.
-              Moving to a new domain or clearing browser data starts fresh unless you back up first.
+              所有数据(分类、项目、任务、时间块、截止日期)都只存在这个浏览器里。
+              换域名或清空浏览器数据前，记得先导出备份。
             </p>
-            <button onClick={handleExport} style={{ ...styles.addBtn, marginBottom: 12 }}>Export all data</button>
+            <button onClick={handleExport} style={{ ...styles.addBtn, marginBottom: 12 }}>导出全部数据</button>
             <div>
               <label style={{ ...styles.addBtn, display: 'inline-block', cursor: 'pointer', background: 'var(--surface-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                Import all data
+                导入全部数据
                 <input type="file" accept="application/json" onChange={handleImportFile} style={{ display: 'none' }} />
               </label>
             </div>

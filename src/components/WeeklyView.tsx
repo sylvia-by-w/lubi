@@ -65,29 +65,35 @@ function fmtHours(min: number) {
   const h = Math.floor(Math.abs(min) / 60)
   const m = Math.abs(min) % 60
   const sign = min < 0 ? '-' : '+'
-  return m === 0 ? `${sign}${h}h` : `${sign}${h}h${m}m`
+  return m === 0 ? `${sign}${h}小时` : `${sign}${h}小时${m}分`
 }
 
 function fmtHoursAbs(min: number) {
   const h = Math.floor(min / 60)
   const m = min % 60
-  return m === 0 ? `${h}h` : `${h}h${m}m`
+  return m === 0 ? `${h}小时` : `${h}小时${m}分`
 }
 
 function formatWeekRange(start: Date, end: Date) {
-  const month = new Intl.DateTimeFormat('en-US', { month: 'short' })
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()
-  const startLabel = sameMonth
-    ? `${month.format(start)} ${start.getDate()}`
-    : `${month.format(start)} ${start.getDate()}`
-  const endLabel = `${sameMonth ? '' : `${month.format(end)} `}${end.getDate()}`
+  const startLabel = `${start.getMonth() + 1}月${start.getDate()}日`
+  const endLabel = sameMonth ? `${end.getDate()}日` : `${end.getMonth() + 1}月${end.getDate()}日`
   return `${startLabel} - ${endLabel}`
 }
 
-function projectStatusLabel(todayPlanned: number, todayActual: number) {
-  if (todayPlanned > 0 && todayActual === 0) return 'Not started'
-  if (todayActual > 0 && todayPlanned > 0 && todayActual >= todayPlanned) return 'Done today'
-  if (todayActual > 0) return 'In progress'
+type ProjectFocusStatus = 'not_started' | 'done_today' | 'in_progress' | ''
+
+function projectStatusCode(todayPlanned: number, todayActual: number): ProjectFocusStatus {
+  if (todayPlanned > 0 && todayActual === 0) return 'not_started'
+  if (todayActual > 0 && todayPlanned > 0 && todayActual >= todayPlanned) return 'done_today'
+  if (todayActual > 0) return 'in_progress'
+  return ''
+}
+
+function projectStatusText(status: ProjectFocusStatus) {
+  if (status === 'not_started') return '未开始'
+  if (status === 'done_today') return '今日已完成'
+  if (status === 'in_progress') return '进行中'
   return ''
 }
 
@@ -327,7 +333,7 @@ export default function WeeklyView({
       const linkedDeadline = project.deadlineId
         ? deadlines.find(deadline => deadline.id === project.deadlineId && deadline.date >= selectedDate)
         : deadlines.find(deadline => deadline.projectId === project.id && deadline.date >= selectedDate)
-      const statusLabel = projectStatusLabel(todayPlanned, todayActual)
+      const statusCode = projectStatusCode(todayPlanned, todayActual)
       const progressBase = todayPlanned > 0
         ? todayPlanned
         : linkedProjectTasks.length > 0
@@ -349,7 +355,7 @@ export default function WeeklyView({
         doneProjectTasks,
         activeTasks,
         linkedDeadline,
-        statusLabel,
+        statusCode,
         progressValue,
       }
     })
@@ -386,7 +392,7 @@ export default function WeeklyView({
       value: calcMinutes(selectedActualTasks.filter(t => t.categoryId === cat.id)),
       color: cat.color,
       total: selectedActualMinutes,
-      ring: 'Category',
+      ring: '分类',
     }))
     .filter(item => item.value > 0)
   const highValueMinutes = calcMinutes(selectedActualTasks.filter(t => t.valueLevel === 'high'))
@@ -395,10 +401,10 @@ export default function WeeklyView({
   const unratedValueMinutes = calcMinutes(selectedActualTasks.filter(t => !t.valueLevel))
   const hasValueData = selectedActualTasks.some(t => t.valueLevel)
   const valueAllocation = [
-    { name: 'High value', value: highValueMinutes, color: '#f59e0b', total: selectedActualMinutes, ring: 'Value' },
-    { name: 'Medium value', value: mediumValueMinutes, color: '#6366f1', total: selectedActualMinutes, ring: 'Value' },
-    { name: 'Low value', value: lowValueMinutes, color: '#9ca3af', total: selectedActualMinutes, ring: 'Value' },
-    { name: 'Unrated', value: unratedValueMinutes, color: '#e5e7eb', total: selectedActualMinutes, ring: 'Value' },
+    { name: '高价值', value: highValueMinutes, color: '#f59e0b', total: selectedActualMinutes, ring: '价值' },
+    { name: '中价值', value: mediumValueMinutes, color: '#6366f1', total: selectedActualMinutes, ring: '价值' },
+    { name: '低价值', value: lowValueMinutes, color: '#9ca3af', total: selectedActualMinutes, ring: '价值' },
+    { name: '未评级', value: unratedValueMinutes, color: '#e5e7eb', total: selectedActualMinutes, ring: '价值' },
   ].filter(item => item.value > 0)
   const hasEnergyData = selectedActualTasks.some(t => t.energyLevel)
   const goldenMinutes = calcMinutes(selectedActualTasks.filter(t => t.energyLevel === 'high' && t.valueLevel === 'high'))
@@ -460,7 +466,7 @@ export default function WeeklyView({
       const result = await generateDailyReview(buildDailyData())
       saveDailyReview(selectedDate, result)
     } catch {
-      setAiError('Daily review generation failed.')
+      setAiError('生成每日回顾失败。')
     } finally {
       setAiLoading(null)
     }
@@ -473,7 +479,7 @@ export default function WeeklyView({
       const result = await generateWeeklyReview(buildWeeklyData())
       saveWeeklyReview(weekKey, weekEnd, result)
     } catch {
-      setAiError('Weekly review generation failed.')
+      setAiError('生成每周回顾失败。')
     } finally {
       setAiLoading(null)
     }
@@ -493,35 +499,35 @@ export default function WeeklyView({
     <div className="weekly-dashboard">
       <aside className="weekly-sidebar weekly-sidebar-left">
         <section className="dashboard-card ai-review-module">
-          <h2>AI Review</h2>
+          <h2>AI 回顾</h2>
           <div className="ai-action-row">
             <button
               className="ghost-button"
               onClick={handleGenerateDailyReview}
               disabled={aiLoading !== null}
             >
-              {aiLoading === 'daily' ? 'Generating...' : 'Generate Daily Review'}
+              {aiLoading === 'daily' ? '生成中...' : '生成每日回顾'}
             </button>
             <button
               className="ghost-button"
               onClick={handleGenerateWeeklyReview}
               disabled={aiLoading !== null}
             >
-              {aiLoading === 'weekly' ? 'Generating...' : 'Generate Weekly Review'}
+              {aiLoading === 'weekly' ? '生成中...' : '生成每周回顾'}
             </button>
           </div>
           {aiError && <p className="ai-error">{aiError}</p>}
           <div className="ai-review-list">
             <AIReviewCard
-              title={`Daily Review (${selectedDate})`}
+              title={`每日回顾（${selectedDate}）`}
               review={dailyAIResult}
-              emptyText="Generate a daily review for the selected date."
+              emptyText="为选中的日期生成一份每日回顾。"
               onSaveNote={saveReviewNote}
             />
             <AIReviewCard
-              title={`Weekly Review (${formatWeekRange(weekStart, days[days.length - 1])})`}
+              title={`每周回顾（${formatWeekRange(weekStart, days[days.length - 1])}）`}
               review={weeklyAIResult}
-              emptyText="Generate a weekly review for this week."
+              emptyText="为本周生成一份每周回顾。"
               onSaveNote={saveReviewNote}
             />
           </div>
@@ -588,16 +594,16 @@ export default function WeeklyView({
       <aside className="weekly-sidebar weekly-sidebar-right">
         <section className="dashboard-card">
           <div className="analytics-title-row">
-            <h2>Today Analytics</h2>
+            <h2>今日分析</h2>
             <span
               className="analytics-info"
-              title="Outer ring: category allocation. Inner ring: value distribution. Golden: high energy + high value. Prime Waste: high energy + low value."
+              title="外环：分类占比。内环：价值分布。黄金时间：高精力+高价值。隐性浪费：高精力+低价值。"
             >
               i
             </span>
           </div>
           {todayCategoryAllocation.length === 0 ? (
-            <p className="empty-state">No actual time recorded for this day</p>
+            <p className="empty-state">今天还没有记录实际时间</p>
           ) : (
             <div className="today-analytics">
               <ResponsiveContainer width="100%" height={180}>
@@ -634,20 +640,20 @@ export default function WeeklyView({
                   )}
                   <Tooltip content={<TodayAnalyticsTooltip />} />
                   <text x="50%" y="48%" textAnchor="middle" className="donut-center-value">
-                    {hasValueData ? fmtHoursAbs(highValueMinutes) : 'No'}
+                    {hasValueData ? fmtHoursAbs(highValueMinutes) : '无'}
                   </text>
                   <text x="50%" y="59%" textAnchor="middle" className="donut-center-label">
-                    {hasValueData ? 'High-value' : 'value data'}
+                    {hasValueData ? '高价值' : '价值数据'}
                   </text>
                 </PieChart>
               </ResponsiveContainer>
               {hasEnergyData && (
                 <div className="analytics-chip-row quality-only">
-                  <span className="analytics-chip golden-chip" title="High energy + high value">
-                    <span aria-hidden="true">&#9889;</span>Golden: {fmtHoursAbs(goldenMinutes)}
+                  <span className="analytics-chip golden-chip" title="高精力 + 高价值">
+                    <span aria-hidden="true">&#9889;</span>黄金时间：{fmtHoursAbs(goldenMinutes)}
                   </span>
-                  <span className="analytics-chip waste-chip" title="High energy + low value">
-                    <span aria-hidden="true">&#128293;</span>Prime Waste: {fmtHoursAbs(primeWasteMinutes)}
+                  <span className="analytics-chip waste-chip" title="高精力 + 低价值">
+                    <span aria-hidden="true">&#128293;</span>隐性浪费：{fmtHoursAbs(primeWasteMinutes)}
                   </span>
                 </div>
               )}
@@ -656,9 +662,9 @@ export default function WeeklyView({
         </section>
 
         <section className="dashboard-card">
-          <h2>Project Focus</h2>
+          <h2>项目焦点</h2>
           {activeProjectFocus.length === 0 ? (
-            <p className="empty-state">No project focus yet. Pin up to 3 projects from the Projects page.</p>
+            <p className="empty-state">还没有项目焦点。可以在项目页面里最多置顶3个项目。</p>
           ) : (
             <div className="project-focus-list">
               {activeProjectFocus.map(item => (
@@ -672,15 +678,15 @@ export default function WeeklyView({
                   </div>
                   <div className="project-focus-meta">
                     {item.todayPlanned > 0 && (
-                      <span>Today {fmtHoursAbs(item.todayActual)} / {fmtHoursAbs(item.todayPlanned)}</span>
+                      <span>今天 {fmtHoursAbs(item.todayActual)} / {fmtHoursAbs(item.todayPlanned)}</span>
                     )}
-                    <span>Tasks {item.doneProjectTasks}/{item.linkedProjectTasks.length}</span>
-                    {item.linkedDeadline && <span>Due {item.linkedDeadline.date}</span>}
+                    <span>任务 {item.doneProjectTasks}/{item.linkedProjectTasks.length}</span>
+                    {item.linkedDeadline && <span>截止 {item.linkedDeadline.date}</span>}
                   </div>
                   <div className="project-focus-bottom">
                     <div
                       className="progress-track project-focus-track"
-                      title="Today progress, or project task progress when no time is planned today"
+                      title="今天的进度；如果今天没有计划时间，则显示任务完成进度"
                     >
                       <div
                         className="progress-fill"
@@ -690,9 +696,9 @@ export default function WeeklyView({
                         }}
                       />
                     </div>
-                    {item.statusLabel && (
-                      <span className={`project-focus-status ${item.statusLabel === 'Not started' ? 'idle' : 'active'}`}>
-                        {item.statusLabel}
+                    {item.statusCode && (
+                      <span className={`project-focus-status ${item.statusCode === 'not_started' ? 'idle' : 'active'}`}>
+                        {projectStatusText(item.statusCode)}
                       </span>
                     )}
                   </div>
@@ -703,9 +709,9 @@ export default function WeeklyView({
         </section>
 
         <section className="dashboard-card">
-          <h2>Biggest Deviations</h2>
+          <h2>偏差最大</h2>
           {deviationStats.length === 0 ? (
-            <p className="empty-state">No plan and actual comparison yet</p>
+            <p className="empty-state">暂无计划与实际的对比数据</p>
           ) : (
             <div className="metric-list">
               {deviationStats.map(item => (
@@ -716,8 +722,8 @@ export default function WeeklyView({
                     <strong className={item.diff >= 0 ? 'positive' : 'negative'}>{fmtHours(item.diff)}</strong>
                   </div>
                   <div className="mini-stats">
-                    <span>Planned {fmtHoursAbs(item.planned)}</span>
-                    <span>Actual {fmtHoursAbs(item.actual)}</span>
+                    <span>计划 {fmtHoursAbs(item.planned)}</span>
+                    <span>实际 {fmtHoursAbs(item.actual)}</span>
                   </div>
                 </div>
               ))}
@@ -769,11 +775,11 @@ function AIReviewCard({
       <div className="ai-review-card-header">
         <div>
           <h3>{title}</h3>
-          {review && <small>{new Date(review.updatedAt ?? review.createdAt).toLocaleString()}</small>}
+          {review && <small>{new Date(review.updatedAt ?? review.createdAt).toLocaleString('zh-CN')}</small>}
         </div>
         {review && (
           <button className="text-button" onClick={startEditing}>
-            {review.userNote ? 'Edit Note' : 'Add Note'}
+            {review.userNote ? '编辑备注' : '添加备注'}
           </button>
         )}
       </div>
@@ -783,7 +789,7 @@ function AIReviewCard({
           <pre className="ai-review-content">{displayedContent}</pre>
           {hasLongContent && (
             <button className="text-button inline" onClick={() => setExpanded(prev => !prev)}>
-              {expanded ? 'Collapse' : 'Expand'}
+              {expanded ? '收起' : '展开'}
             </button>
           )}
 
@@ -793,11 +799,11 @@ function AIReviewCard({
                 className="review-textarea tall"
                 value={draftNote}
                 onChange={e => setDraftNote(e.target.value)}
-                placeholder="Add context, correction, or next adjustment..."
+                placeholder="补充背景、修正或下一步调整..."
               />
               <div className="note-action-row">
-                <button className="ghost-button compact" onClick={cancelEditing}>Cancel</button>
-                <button className="primary-button compact" onClick={saveNote}>Save</button>
+                <button className="ghost-button compact" onClick={cancelEditing}>取消</button>
+                <button className="primary-button compact" onClick={saveNote}>保存</button>
               </div>
             </div>
           ) : review.userNote ? (

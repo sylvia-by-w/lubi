@@ -56,16 +56,16 @@ function calcMinutes(tasks: TaskBlock[]) {
 function fmtHours(minutes: number) {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (h === 0 && m === 0) return '0h'
-  return m === 0 ? `${h}h` : `${h}h ${m}m`
+  if (h === 0 && m === 0) return '0小时'
+  return m === 0 ? `${h}小时` : `${h}小时${m}分`
 }
 
 function fmtEstimate(minutes: number) {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
+  if (h === 0) return `${m}分钟`
+  if (m === 0) return `${h}小时`
+  return `${h}小时${m}分钟`
 }
 
 function taskEstimateMinutes(task: ProjectTask) {
@@ -73,7 +73,23 @@ function taskEstimateMinutes(task: ProjectTask) {
 }
 
 function formatStatus(status: string) {
-  return status.replace('_', ' ')
+  switch (status) {
+    case 'all': return '全部'
+    case 'active': return '进行中'
+    case 'paused': return '已暂停'
+    case 'completed': return '已完成'
+    case 'archived': return '已归档'
+    case 'todo': return '待办'
+    case 'in_progress': return '进行中'
+    case 'done': return '已完成'
+    default: return status
+  }
+}
+
+function priorityText(priority: PriorityLevel) {
+  if (priority === 'high') return '高'
+  if (priority === 'medium') return '中'
+  return '低'
 }
 
 function projectStatus(project: Project): ProjectStatus {
@@ -113,7 +129,7 @@ function getProjectDeadline(project: Project, deadlines: Deadline[]) {
   if (legacyDeadline) {
     return {
       id: `project-${project.id}-deadline`,
-      title: 'Project deadline',
+      title: '项目截止日期',
       date: legacyDeadline,
       projectId: project.id,
       createdAt: project.createdAt ?? '',
@@ -147,7 +163,7 @@ function buildProjectMetrics(
   return {
     category,
     deadline,
-    deadlineLabel: deadline ? `${deadline.title}: ${deadline.date}` : 'No deadline',
+    deadlineLabel: deadline ? `${deadline.title}: ${deadline.date}` : '暂无截止日期',
     investedMinutes,
     thisWeekMinutes,
     linkedTasks,
@@ -183,7 +199,7 @@ export default function Projects({
   const togglePin = (project: Project) => {
     setPinWarning('')
     if (!project.pinnedToHome && pinnedCount >= 3) {
-      setPinWarning('You can pin up to 3 projects to the homepage.')
+      setPinWarning('最多可以在主页置顶3个项目。')
       return
     }
 
@@ -198,8 +214,8 @@ export default function Projects({
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Projects</h1>
-          <p style={styles.subtitle}>Long-term goals, milestones, and invested time.</p>
+          <h1 style={styles.title}>项目</h1>
+          <p style={styles.subtitle}>长期目标、里程碑与投入时间。</p>
         </div>
         <div style={styles.filterRow}>
           {statusesWithAll.map(status => (
@@ -215,15 +231,15 @@ export default function Projects({
       </div>
 
       <div style={styles.summaryRow}>
-        <SummaryMetric label="Active Projects" value={String(projects.filter(project => projectStatus(project) === 'active').length)} />
-        <SummaryMetric label="Pinned Projects" value={`${pinnedCount}/3`} />
-        <SummaryMetric label="This Week Invested" value={fmtHours(thisWeekInvested)} />
-        <SummaryMetric label="Tasks Done" value={`${doneProjectTasks}/${projectTasks.length}`} />
+        <SummaryMetric label="进行中的项目" value={String(projects.filter(project => projectStatus(project) === 'active').length)} />
+        <SummaryMetric label="已置顶项目" value={`${pinnedCount}/3`} />
+        <SummaryMetric label="本周投入" value={fmtHours(thisWeekInvested)} />
+        <SummaryMetric label="已完成任务" value={`${doneProjectTasks}/${projectTasks.length}`} />
       </div>
       {pinWarning && <div style={styles.warningBanner}>{pinWarning}</div>}
 
       {visibleProjects.length === 0 ? (
-        <div style={styles.emptyCard}>No projects in this view. Add projects in Settings for now.</div>
+        <div style={styles.emptyCard}>这个视图里还没有项目。可以先在设置里添加项目。</div>
       ) : (
         <div style={styles.grid}>
           {visibleProjects.map(project => (
@@ -272,7 +288,7 @@ function ProjectCard({
   onTogglePin: () => void
   onOpen: () => void
 }) {
-  const accent = metrics.category?.color ?? '#6366f1'
+  const accent = metrics.category?.color ?? '#9ca3af'
 
   return (
     <article style={styles.projectCard} onClick={onOpen}>
@@ -281,7 +297,7 @@ function ProjectCard({
           <h2 style={styles.projectName}>{project.name}</h2>
           <span style={styles.categoryLine}>
             <span style={{ ...styles.dot, background: accent }} />
-            {metrics.category?.name ?? 'Unknown category'}
+            {metrics.category?.name ?? '未知分类'}
           </span>
         </div>
         <div style={styles.cardActions}>
@@ -292,9 +308,9 @@ function ProjectCard({
               event.stopPropagation()
               onTogglePin()
             }}
-            title={project.pinnedToHome ? 'Pinned to homepage' : 'Pin to homepage'}
+            title={project.pinnedToHome ? '已置顶到主页' : '置顶到主页'}
           >
-            {project.pinnedToHome ? 'Pinned' : 'Pin'}
+            {project.pinnedToHome ? '已置顶' : '置顶'}
           </button>
         </div>
       </div>
@@ -302,18 +318,18 @@ function ProjectCard({
       {project.description && <p style={styles.cardDescription}>{project.description}</p>}
 
       <div style={styles.metricGrid}>
-        <Metric label="Total invested" value={fmtHours(metrics.investedMinutes)} />
-        <Metric label="This week" value={fmtHours(metrics.thisWeekMinutes)} />
+        <Metric label="累计投入" value={fmtHours(metrics.investedMinutes)} />
+        <Metric label="本周" value={fmtHours(metrics.thisWeekMinutes)} />
       </div>
 
       <Progress
-        label="Time Progress"
+        label="时间进度"
         value={metrics.timeRatio}
         color={accent}
-        note={project.targetHours ? `${fmtHours(metrics.investedMinutes)} / ${project.targetHours}h` : 'No target set'}
+        note={project.targetHours ? `${fmtHours(metrics.investedMinutes)} / ${project.targetHours}小时` : '未设置目标'}
       />
       <Progress
-        label="Task Progress"
+        label="任务进度"
         value={metrics.taskRatio}
         color={accent}
         note={`${metrics.doneTasks}/${metrics.linkedTasks.length}`}
@@ -323,8 +339,8 @@ function ProjectCard({
         <span style={metrics.deadline ? styles.deadlineText : styles.muted}>{metrics.deadlineLabel}</span>
       </div>
       <div style={styles.nextTask}>
-        <span style={styles.nextTaskLabel}>Next task</span>
-        <strong>{metrics.nextTask?.title ?? 'No open project tasks'}</strong>
+        <span style={styles.nextTaskLabel}>下一个任务</span>
+        <strong>{metrics.nextTask?.title ?? '暂无未完成的任务'}</strong>
       </div>
 
       <div style={styles.cardButtonRow}>
@@ -335,7 +351,7 @@ function ProjectCard({
             onOpen()
           }}
         >
-          Open Details
+          查看详情
         </button>
         <button
           style={styles.primaryLightBtn}
@@ -344,7 +360,7 @@ function ProjectCard({
             onOpen()
           }}
         >
-          Add Task
+          添加任务
         </button>
       </div>
     </article>
@@ -381,7 +397,7 @@ function ProjectDetail({
   onDeleteProjectTask: (id: string) => void
 }) {
   const metrics = buildProjectMetrics(project, categories, deadlines, calendarTasks, projectTasks, weekStart)
-  const accent = metrics.category?.color ?? '#6366f1'
+  const accent = metrics.category?.color ?? '#9ca3af'
   const [description, setDescription] = useState(project.description ?? '')
   const [targetHours, setTargetHours] = useState(project.targetHours ? String(project.targetHours) : '')
   const [status, setStatus] = useState<ProjectStatus>(projectStatus(project))
@@ -424,7 +440,7 @@ function ProjectDetail({
   const duplicateProjectTask = (task: ProjectTask) => {
     onAddProjectTask({
       projectId: task.projectId,
-      title: `Copy of ${task.title}`,
+      title: `${task.title}（副本）`,
       status: 'todo',
       dueDate: task.dueDate,
       estimatedMinutes: taskEstimateMinutes(task),
@@ -450,7 +466,7 @@ function ProjectDetail({
             <h2 style={styles.detailTitle}>{project.name}</h2>
             <span style={styles.categoryLine}>
               <span style={{ ...styles.dot, background: accent }} />
-              {metrics.category?.name ?? 'Unknown category'}
+              {metrics.category?.name ?? '未知分类'}
             </span>
           </div>
           <div style={styles.detailActions}>
@@ -458,101 +474,101 @@ function ProjectDetail({
             <button
               style={{ ...styles.pinBtn, ...(project.pinnedToHome ? styles.pinBtnActive : {}) }}
               onClick={onTogglePin}
-              title={project.pinnedToHome ? 'Pinned to homepage' : 'Pin to homepage'}
+              title={project.pinnedToHome ? '已置顶到主页' : '置顶到主页'}
             >
-              {project.pinnedToHome ? 'Pinned' : 'Pin to Home'}
+              {project.pinnedToHome ? '已置顶' : '置顶到主页'}
             </button>
-            <button style={styles.closeBtn} onClick={onClose} aria-label="Close project details">x</button>
+            <button style={styles.closeBtn} onClick={onClose} aria-label="关闭项目详情">x</button>
           </div>
         </div>
         {!project.pinnedToHome && pinnedCount >= 3 && (
-          <div style={styles.warningBanner}>You can pin up to 3 projects to the homepage.</div>
+          <div style={styles.warningBanner}>最多可以在主页置顶3个项目。</div>
         )}
 
         <div style={styles.detailSummary}>
-          <Metric label="Total invested" value={fmtHours(metrics.investedMinutes)} />
-          <Metric label="This week" value={fmtHours(metrics.thisWeekMinutes)} />
-          <Metric label="Target hours" value={project.targetHours ? `${project.targetHours}h` : 'No target set'} />
-          <Metric label="Deadline" value={metrics.deadline?.date ?? 'No deadline'} />
+          <Metric label="累计投入" value={fmtHours(metrics.investedMinutes)} />
+          <Metric label="本周" value={fmtHours(metrics.thisWeekMinutes)} />
+          <Metric label="目标时长" value={project.targetHours ? `${project.targetHours}小时` : '未设置目标'} />
+          <Metric label="截止日期" value={metrics.deadline?.date ?? '暂无截止日期'} />
         </div>
 
         <div style={styles.twoCol}>
           <section style={styles.panelSection}>
-            <h3 style={styles.sectionTitle}>Overview</h3>
-            <label style={styles.label}>Description</label>
+            <h3 style={styles.sectionTitle}>概览</h3>
+            <label style={styles.label}>描述</label>
             <textarea
               style={{ ...styles.input, minHeight: 82, resize: 'vertical' }}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="What this long-term track is meant to move forward."
+              placeholder="这个长期方向想要推进什么。"
             />
 
             <div style={styles.row}>
               <div style={{ flex: 1 }}>
-                <label style={styles.label}>Target hours</label>
+                <label style={styles.label}>目标时长(小时)</label>
                 <input style={styles.input} type="number" min="0" value={targetHours} onChange={e => setTargetHours(e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={styles.label}>Status</label>
+                <label style={styles.label}>状态</label>
                 <select style={styles.input} value={status} onChange={e => setStatus(e.target.value as ProjectStatus)}>
                   {statuses.map(item => <option key={item} value={item}>{formatStatus(item)}</option>)}
                 </select>
               </div>
             </div>
 
-            <label style={styles.label}>Deadline</label>
+            <label style={styles.label}>截止日期</label>
             <select style={styles.input} value={deadlineId} onChange={e => setDeadlineId(e.target.value)}>
-              <option value="">No deadline</option>
+              <option value="">暂无截止日期</option>
               {deadlines.map(deadline => (
                 <option key={deadline.id} value={deadline.id}>{deadline.title} ({deadline.date})</option>
               ))}
             </select>
 
-            <button style={styles.saveBtn} onClick={saveOverview}>Save Overview</button>
+            <button style={styles.saveBtn} onClick={saveOverview}>保存概览</button>
           </section>
 
           <section style={styles.panelSection}>
-            <h3 style={styles.sectionTitle}>Progress</h3>
+            <h3 style={styles.sectionTitle}>进度</h3>
             <Progress
-              label="Time Progress"
+              label="时间进度"
               value={metrics.timeRatio}
               color={accent}
-              note={project.targetHours ? `${fmtHours(metrics.investedMinutes)} / ${project.targetHours}h` : 'No target set'}
+              note={project.targetHours ? `${fmtHours(metrics.investedMinutes)} / ${project.targetHours}小时` : '未设置目标'}
             />
             <Progress
-              label="Task Progress"
+              label="任务进度"
               value={metrics.taskRatio}
               color={accent}
               note={`${metrics.doneTasks}/${metrics.linkedTasks.length}`}
             />
             <div style={styles.detailMetaStack}>
-              <span><strong>Status:</strong> {formatStatus(projectStatus(project))}</span>
-              <span><strong>Pinned:</strong> {project.pinnedToHome ? 'Yes' : 'No'}</span>
-              <span><strong>Deadline:</strong> {metrics.deadlineLabel}</span>
+              <span><strong>状态：</strong>{formatStatus(projectStatus(project))}</span>
+              <span><strong>已置顶：</strong>{project.pinnedToHome ? '是' : '否'}</span>
+              <span><strong>截止日期：</strong>{metrics.deadlineLabel}</span>
             </div>
           </section>
         </div>
 
         <section style={styles.panelSection}>
           <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Project Tasks</h3>
-            {editingTaskId && <button style={styles.linkBtn} onClick={() => { setTaskForm(emptyTaskForm); setEditingTaskId(null) }}>Cancel Edit</button>}
+            <h3 style={styles.sectionTitle}>项目任务</h3>
+            {editingTaskId && <button style={styles.linkBtn} onClick={() => { setTaskForm(emptyTaskForm); setEditingTaskId(null) }}>取消编辑</button>}
           </div>
           <div style={styles.taskForm}>
-            <input style={{ ...styles.input, flex: '1 1 230px' }} placeholder="Milestone or checklist item" value={taskForm.title} onChange={e => setTaskForm(prev => ({ ...prev, title: e.target.value }))} />
+            <input style={{ ...styles.input, flex: '1 1 230px' }} placeholder="里程碑或清单项" value={taskForm.title} onChange={e => setTaskForm(prev => ({ ...prev, title: e.target.value }))} />
             <select style={{ ...styles.input, width: 132 }} value={taskForm.status} onChange={e => setTaskForm(prev => ({ ...prev, status: e.target.value as ProjectTaskStatus }))}>
               {taskStatuses.map(item => <option key={item} value={item}>{formatStatus(item)}</option>)}
             </select>
             <input style={{ ...styles.input, width: 138 }} type="date" value={taskForm.dueDate} onChange={e => setTaskForm(prev => ({ ...prev, dueDate: e.target.value }))} />
-            <input style={{ ...styles.input, width: 72 }} type="number" min="0" placeholder="h" value={taskForm.estimatedHours} onChange={e => setTaskForm(prev => ({ ...prev, estimatedHours: e.target.value }))} />
-            <input style={{ ...styles.input, width: 72 }} type="number" min="0" max="59" placeholder="m" value={taskForm.estimatedMinutes} onChange={e => setTaskForm(prev => ({ ...prev, estimatedMinutes: e.target.value }))} />
+            <input style={{ ...styles.input, width: 72 }} type="number" min="0" placeholder="时" value={taskForm.estimatedHours} onChange={e => setTaskForm(prev => ({ ...prev, estimatedHours: e.target.value }))} />
+            <input style={{ ...styles.input, width: 72 }} type="number" min="0" max="59" placeholder="分" value={taskForm.estimatedMinutes} onChange={e => setTaskForm(prev => ({ ...prev, estimatedMinutes: e.target.value }))} />
             <select style={{ ...styles.input, width: 112 }} value={taskForm.priority} onChange={e => setTaskForm(prev => ({ ...prev, priority: e.target.value as PriorityLevel | '' }))}>
-              <option value="">Priority</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+              <option value="">优先级</option>
+              <option value="low">低</option>
+              <option value="medium">中</option>
+              <option value="high">高</option>
             </select>
-            <button style={styles.saveBtn} onClick={saveProjectTask}>{editingTaskId ? 'Save Task' : 'Add Task'}</button>
+            <button style={styles.saveBtn} onClick={saveProjectTask}>{editingTaskId ? '保存任务' : '添加任务'}</button>
           </div>
 
           <div style={styles.taskList}>
@@ -563,22 +579,22 @@ function ProjectDetail({
                   checked={task.status === 'done'}
                   onChange={() => toggleProjectTaskDone(task)}
                   style={styles.checkbox}
-                  title={task.status === 'done' ? 'Mark as todo' : 'Mark as done'}
+                  title={task.status === 'done' ? '标记为待办' : '标记为已完成'}
                 />
                 <button style={styles.taskTitleButton} onClick={() => { setTaskForm(taskToForm(task)); setEditingTaskId(task.id) }}>
                   <span style={{ ...styles.taskTitle, ...(task.status === 'done' ? styles.taskTitleDone : {}) }}>{task.title}</span>
-                  <span style={styles.createdText}>Created {new Date(task.createdAt).toLocaleDateString()}</span>
+                  <span style={styles.createdText}>创建于 {new Date(task.createdAt).toLocaleDateString('zh-CN')}</span>
                 </button>
                 <span style={styles.statusPill}>{formatStatus(task.status)}</span>
-                {task.dueDate && <span style={styles.muted}>Due {task.dueDate}</span>}
+                {task.dueDate && <span style={styles.muted}>截止 {task.dueDate}</span>}
                 {taskEstimateMinutes(task) !== undefined && <span style={styles.muted}>{fmtEstimate(taskEstimateMinutes(task) ?? 0)}</span>}
-                {task.priority && <span style={{ ...styles.priorityBadge, ...priorityTone(task.priority) }}>{task.priority}</span>}
-                <button style={styles.linkBtn} onClick={() => { setTaskForm(taskToForm(task)); setEditingTaskId(task.id) }}>Edit</button>
-                <button style={styles.linkBtn} onClick={() => duplicateProjectTask(task)}>Duplicate</button>
-                <button style={styles.dangerBtn} onClick={() => onDeleteProjectTask(task.id)}>Delete</button>
+                {task.priority && <span style={{ ...styles.priorityBadge, ...priorityTone(task.priority) }}>{priorityText(task.priority)}</span>}
+                <button style={styles.linkBtn} onClick={() => { setTaskForm(taskToForm(task)); setEditingTaskId(task.id) }}>编辑</button>
+                <button style={styles.linkBtn} onClick={() => duplicateProjectTask(task)}>复制</button>
+                <button style={styles.dangerBtn} onClick={() => onDeleteProjectTask(task.id)}>删除</button>
               </div>
             ))}
-            {projectTasks.length === 0 && <p style={styles.emptyText}>No project tasks yet.</p>}
+            {projectTasks.length === 0 && <p style={styles.emptyText}>还没有项目任务。</p>}
           </div>
         </section>
       </div>
@@ -638,7 +654,7 @@ const styles: Record<string, CSSProperties> = {
   subtitle: { margin: '5px 0 0', color: 'var(--text-secondary)', fontSize: 14 },
   filterRow: { display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
   filterBtn: { padding: '7px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', textTransform: 'capitalize', fontWeight: 700 },
-  filterBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: '#c7d2fe' },
+  filterBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: 'var(--border)' },
   summaryRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 },
   summaryMetric: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: '12px 14px', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column', gap: 3 },
   warningBanner: { border: '1px solid #fde68a', background: 'var(--warning-soft)', color: '#92400e', borderRadius: 'var(--radius-sm)', padding: '9px 11px', fontSize: 12, fontWeight: 700, marginBottom: 12 },
@@ -666,7 +682,7 @@ const styles: Record<string, CSSProperties> = {
   nextTaskLabel: { color: 'var(--text-muted)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase' },
   cardButtonRow: { display: 'flex', gap: 8, marginTop: 12 },
   secondaryBtn: { flex: 1, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface)', color: 'var(--text-primary)', padding: '8px 10px', cursor: 'pointer', fontWeight: 800 },
-  primaryLightBtn: { border: '1px solid #c7d2fe', borderRadius: 'var(--radius-sm)', background: 'var(--primary-soft)', color: 'var(--primary)', padding: '8px 10px', cursor: 'pointer', fontWeight: 800 },
+  primaryLightBtn: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--primary-soft)', color: 'var(--primary)', padding: '8px 10px', cursor: 'pointer', fontWeight: 800 },
   muted: { color: 'var(--text-muted)', fontSize: 12 },
   emptyCard: { border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: 18, color: 'var(--text-muted)', boxShadow: 'var(--shadow-card)' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.42)', display: 'flex', justifyContent: 'flex-end', zIndex: 1000 },

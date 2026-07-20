@@ -1,16 +1,16 @@
 :root {
-  --app-bg: #f6f7fb;
+  --app-bg: #f3f4f2;
   --surface: #ffffff;
-  --surface-muted: #f3f4f6;
-  --surface-soft: #f9fafb;
+  --surface-muted: #f0f0ee;
+  --surface-soft: #f9faf8;
   --text-primary: #111827;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
-  --border: #e5e7eb;
-  --border-soft: #eef0f3;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-soft: #eef2ff;
+  --border: #e2e2de;
+  --border-soft: #edeeeb;
+  --primary: #2b2b2b;
+  --primary-hover: #171717;
+  --primary-soft: #ececea;
   --success: #10b981;
   --success-soft: #ecfdf5;
   --warning: #f59e0b;
@@ -73,14 +73,14 @@ button {
 }
 
 button:hover:not(:disabled) {
-  border-color: rgba(79, 70, 229, 0.28);
+  border-color: rgba(43, 43, 43, 0.28);
 }
 
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(79, 70, 229, 0.3);
+  outline: 2px solid rgba(43, 43, 43, 0.3);
   outline-offset: 2px;
 }
 
@@ -99,5 +99,5 @@ h3 {
 }
 
 ::selection {
-  background: rgba(79, 70, 229, 0.18);
+  background: rgba(43, 43, 43, 0.18);
 }

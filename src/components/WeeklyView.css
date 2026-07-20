@@ -58,7 +58,7 @@
 .review-textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  box-shadow: 0 0 0 3px rgba(43, 43, 43, 0.12);
 }
 
 .review-textarea.tall {
@@ -200,7 +200,7 @@
 
 .ai-note-preview {
   margin-top: 8px;
-  border-left: 2px solid #c7d2fe;
+  border-left: 2px solid var(--border);
   padding-left: 7px;
   white-space: pre-wrap;
   font-size: 12px;

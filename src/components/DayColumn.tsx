@@ -24,9 +24,9 @@ function formatDuration(startTime: string, endTime: string) {
   const minutes = Math.max(0, timeToMin(endTime) - timeToMin(startTime))
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (h === 0) return `${m}min`
-  if (m === 0) return `${h}h`
-  return `${h}h${m}min`
+  if (h === 0) return `${m}分钟`
+  if (m === 0) return `${h}小时`
+  return `${h}小时${m}分钟`
 }
 
 const SLOT_MINUTES = 15
@@ -200,8 +200,8 @@ function SelectionBlock({ drag }: { drag: DragState }) {
         height: `${((endSlot - startSlot) / SLOT_COUNT) * 100}%`,
         left: drag.type === 'actual' ? 0 : '70%',
         width: drag.type === 'actual' ? '70%' : '30%',
-        background: 'rgba(79, 70, 229, 0.14)',
-        border: '1px solid rgba(79, 70, 229, 0.65)',
+        background: 'rgba(43, 43, 43, 0.14)',
+        border: '1px solid rgba(43, 43, 43, 0.65)',
         boxSizing: 'border-box',
         pointerEvents: 'none',
         zIndex: 3,

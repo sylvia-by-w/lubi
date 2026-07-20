@@ -51,14 +51,21 @@ const energyColors: Record<string, string> = {
   unrated: '#e5e7eb',
 }
 
-const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const levelNames: Record<string, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+  unrated: '未评级',
+}
+
+const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const heatmapMetricLabels: Record<HeatmapMetric, string> = {
-  highValue: 'High-value Time',
-  golden: 'Golden Time',
-  waste: 'Waste Time',
-  productiveRatio: 'Productive Ratio',
-  actual: 'Actual Time',
+  highValue: '高价值时间',
+  golden: '黄金时间',
+  waste: '浪费时间',
+  productiveRatio: '高效占比',
+  actual: '实际时间',
 }
 
 const heatmapScales: Record<HeatmapMetric, string[]> = {
@@ -69,14 +76,14 @@ const heatmapScales: Record<HeatmapMetric, string[]> = {
   productiveRatio: ['#f3f4f6', '#e0e7ff', '#a5b4fc', '#6366f1', '#4338ca'],
 }
 
-const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const monthLabels = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 
 const energyValueGroups = [
-  { id: 'goldenTime', name: 'Golden Time', color: '#f59e0b' },
-  { id: 'otherHighValue', name: 'Other High-value', color: '#60a5fa' },
-  { id: 'primeWaste', name: 'Prime Waste', color: '#ef4444' },
-  { id: 'otherLowValue', name: 'Other Low-value', color: '#9ca3af' },
-  { id: 'neutralUnrated', name: 'Neutral / Unrated', color: '#e5e7eb' },
+  { id: 'goldenTime', name: '黄金时间', color: '#f59e0b' },
+  { id: 'otherHighValue', name: '其他高价值', color: '#60a5fa' },
+  { id: 'primeWaste', name: '隐性浪费', color: '#ef4444' },
+  { id: 'otherLowValue', name: '其他低价值', color: '#9ca3af' },
+  { id: 'neutralUnrated', name: '中性/未评级', color: '#e5e7eb' },
 ]
 
 function fmt(d: Date) {
@@ -131,14 +138,14 @@ function fmtHours(min: number) {
   const h = Math.floor(Math.abs(min) / 60)
   const m = Math.abs(min) % 60
   const sign = min < 0 ? '-' : '+'
-  return m === 0 ? `${sign}${h}h` : `${sign}${h}h${m}m`
+  return m === 0 ? `${sign}${h}小时` : `${sign}${h}小时${m}分`
 }
 
 function fmtHoursAbs(min: number) {
   const h = Math.floor(min / 60)
   const m = min % 60
-  if (h === 0) return `${m}m`
-  return m === 0 ? `${h}h` : `${h}h${m}m`
+  if (h === 0) return `${m}分`
+  return m === 0 ? `${h}小时` : `${h}小时${m}分`
 }
 
 function chartValue(min: number) {
@@ -166,19 +173,19 @@ function downloadCsv(filename: string, rows: Array<Record<string, string | numbe
 function groupKey(task: TaskBlock, groupBy: GroupBy, categories: Category[], projects: Project[]) {
   if (groupBy === 'category') {
     const category = categories.find(item => item.id === task.categoryId)
-    return { id: task.categoryId, name: category?.name ?? 'Unknown', color: category?.color ?? '#9ca3af' }
+    return { id: task.categoryId, name: category?.name ?? '未知', color: category?.color ?? '#9ca3af' }
   }
   if (groupBy === 'project') {
     const project = task.projectId ? projects.find(item => item.id === task.projectId) : undefined
     const category = project ? categories.find(item => item.id === project.categoryId) : undefined
-    return { id: task.projectId ?? 'none', name: project?.name ?? 'No Project', color: category?.color ?? '#9ca3af' }
+    return { id: task.projectId ?? 'none', name: project?.name ?? '无项目', color: category?.color ?? '#9ca3af' }
   }
   if (groupBy === 'valueLevel') {
     const level = task.valueLevel ?? 'unrated'
-    return { id: level, name: level, color: valueColors[level] }
+    return { id: level, name: levelNames[level], color: valueColors[level] }
   }
   const level = task.energyLevel ?? 'unrated'
-  return { id: level, name: level, color: energyColors[level] }
+  return { id: level, name: levelNames[level], color: energyColors[level] }
 }
 
 function isWasteCategory(task: TaskBlock, categories: Category[]) {
@@ -254,23 +261,23 @@ function stableColor(id: string) {
 function longTermGroupKey(task: TaskBlock, groupBy: LongTermGroupBy, categories: Category[], projects: Project[]) {
   if (groupBy === 'category') {
     const category = categories.find(item => item.id === task.categoryId)
-    return { id: task.categoryId, name: category?.name ?? 'Unknown', color: category?.color ?? stableColor(task.categoryId) }
+    return { id: task.categoryId, name: category?.name ?? '未知', color: category?.color ?? stableColor(task.categoryId) }
   }
 
   if (groupBy === 'project') {
     const project = task.projectId ? projects.find(item => item.id === task.projectId) : undefined
     const category = project ? categories.find(item => item.id === project.categoryId) : undefined
     const id = task.projectId ?? 'noProject'
-    return { id, name: project?.name ?? 'No project', color: category?.color ?? stableColor(id) }
+    return { id, name: project?.name ?? '无项目', color: category?.color ?? stableColor(id) }
   }
 
   if (groupBy === 'valueLevel') {
     const level = task.valueLevel ?? 'unrated'
     const names: Record<string, string> = {
-      high: 'High value',
-      medium: 'Medium value',
-      low: 'Low value',
-      unrated: 'Unrated',
+      high: '高价值',
+      medium: '中价值',
+      low: '低价值',
+      unrated: '未评级',
     }
     return { id: level, name: names[level], color: valueColors[level] }
   }
@@ -366,7 +373,7 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
   })).slice(0, 12)
 
   const projectRanking = byProj
-    .map(row => ({ name: row.proj.name, actual: chartValue(row.actual), color: row.cat?.color ?? '#6366f1' }))
+    .map(row => ({ name: row.proj.name, actual: chartValue(row.actual), color: row.cat?.color ?? '#9ca3af' }))
     .sort((a, b) => b.actual - a.actual)
     .slice(0, 8)
 
@@ -423,19 +430,19 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
   const heatmapCsv = yearHeatmap.cells.flatMap(week => week)
     .filter(cell => cell.isInYear)
     .map(cell => ({
-      date: cell.dateStr,
-      weekday: weekdays[mondayWeekdayIndex(cell.dateStr)],
-      metric: heatmapMetricLabels[heatmapMetric],
-      metricValue: heatmapValueText(
+      日期: cell.dateStr,
+      星期: weekdays[mondayWeekdayIndex(cell.dateStr)],
+      指标: heatmapMetricLabels[heatmapMetric],
+      指标值: heatmapValueText(
         heatmapMetric,
         heatmapMetric === 'productiveRatio' ? cell.stats.actual : cell.stats[heatmapMetric],
         cell.ratio
       ),
-      actualMinutes: cell.stats.actual,
-      highValueMinutes: cell.stats.highValue,
-      goldenMinutes: cell.stats.golden,
-      wasteMinutes: cell.stats.waste,
-      productiveRatio: Math.round(cell.ratio * 100),
+      实际分钟: cell.stats.actual,
+      高价值分钟: cell.stats.highValue,
+      黄金时间分钟: cell.stats.golden,
+      浪费分钟: cell.stats.waste,
+      高效占比: Math.round(cell.ratio * 100),
     }))
 
   const longTerm = (() => {
@@ -499,42 +506,42 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
       const hours = Number(row[group.id] ?? 0)
       const minutes = Math.round(hours * 60)
       return {
-        period: String(row.period),
-        periodStart: String(row.periodStart),
-        periodEnd: String(row.periodEnd),
-        group: group.name,
-        minutes,
-        hours,
-        percentage: totalMinutes > 0 ? Math.round((minutes / totalMinutes) * 100) : 0,
+        周期: String(row.period),
+        开始日期: String(row.periodStart),
+        结束日期: String(row.periodEnd),
+        分组: group.name,
+        分钟: minutes,
+        小时: hours,
+        占比: totalMinutes > 0 ? Math.round((minutes / totalMinutes) * 100) : 0,
       }
     })
   })
 
   const rangeOptions: { value: Range; label: string }[] = [
-    { value: 'today', label: 'Today' },
-    { value: 'thisWeek', label: 'This Week' },
-    { value: 'lastWeek', label: 'Last Week' },
-    { value: 'thisMonth', label: 'This Month' },
-    { value: 'custom', label: 'Custom Range' },
+    { value: 'today', label: '今天' },
+    { value: 'thisWeek', label: '本周' },
+    { value: 'lastWeek', label: '上周' },
+    { value: 'thisMonth', label: '本月' },
+    { value: 'custom', label: '自定义范围' },
   ]
 
-  const allocationCsv = allocationData.map(row => ({ name: row.name, minutes: row.value, hours: row.hours }))
-  const trendCsv = trendData
-  const plannedActualCsv = plannedVsActual
-  const rankingCsv = projectRanking
+  const allocationCsv = allocationData.map(row => ({ 名称: row.name, 分钟: row.value, 小时: row.hours }))
+  const trendCsv = trendData.map(row => ({ 日期: row.date, 实际: row.actual, 计划: row.planned, 高价值: row.highValue, 浪费: row.waste }))
+  const plannedActualCsv = plannedVsActual.map(row => ({ 名称: row.name, 计划: row.planned, 实际: row.actual }))
+  const rankingCsv = projectRanking.map(row => ({ 名称: row.name, 实际: row.actual }))
 
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Statistics</h1>
-          <p style={styles.subtitle}>{start} to {end}</p>
+          <h1 style={styles.title}>统计</h1>
+          <p style={styles.subtitle}>{start} 至 {end}</p>
         </div>
       </div>
 
       <div style={styles.panel}>
         <div style={styles.filterBlock}>
-          <span style={styles.filterLabel}>Period</span>
+          <span style={styles.filterLabel}>时间范围</span>
           <div style={styles.rangeRow}>
             {rangeOptions.map(option => (
               <button
@@ -550,36 +557,36 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
 
         {range === 'custom' && (
           <div style={styles.filterGrid}>
-            <label style={styles.label}>Start<input style={styles.input} type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} /></label>
-            <label style={styles.label}>End<input style={styles.input} type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} /></label>
+            <label style={styles.label}>开始<input style={styles.input} type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} /></label>
+            <label style={styles.label}>结束<input style={styles.input} type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} /></label>
           </div>
         )}
 
         <div style={styles.filterGrid}>
-          <label style={styles.label}>Data type
+          <label style={styles.label}>数据类型
             <select style={styles.input} value={dataType} onChange={event => setDataType(event.target.value as DataType)}>
-              <option value="actual">Actual</option>
-              <option value="plan">Planned</option>
-              <option value="both">Both</option>
+              <option value="actual">实际</option>
+              <option value="plan">计划</option>
+              <option value="both">两者</option>
             </select>
           </label>
-          <label style={styles.label}>Group by
+          <label style={styles.label}>分组方式
             <select style={styles.input} value={groupBy} onChange={event => setGroupBy(event.target.value as GroupBy)}>
-              <option value="category">Category</option>
-              <option value="project">Project</option>
-              <option value="valueLevel">Value Level</option>
-              <option value="energyLevel">Energy Level</option>
+              <option value="category">分类</option>
+              <option value="project">项目</option>
+              <option value="valueLevel">价值等级</option>
+              <option value="energyLevel">精力等级</option>
             </select>
           </label>
-          <label style={styles.label}>Project
+          <label style={styles.label}>项目
             <select style={styles.input} value={projectFilter} onChange={event => setProjectFilter(event.target.value)}>
-              <option value="">All projects</option>
+              <option value="">全部项目</option>
               {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
-          <label style={styles.label}>Category
+          <label style={styles.label}>分类
             <select style={styles.input} value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}>
-              <option value="">All categories</option>
+              <option value="">全部分类</option>
               {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
           </label>
@@ -589,27 +596,27 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
       <section style={styles.yearHeatmapCard}>
         <div style={styles.chartHeader}>
           <div>
-            <h2 style={styles.chartTitle}>Year Heatmap</h2>
-            <p style={styles.heatmapSubtitle}>{heatmapYear} quality overview</p>
+            <h2 style={styles.chartTitle}>年度热力图</h2>
+            <p style={styles.heatmapSubtitle}>{heatmapYear}年 质量概览</p>
           </div>
           <div style={styles.chartActions}>
             <select style={styles.smallSelect} value={heatmapYear} onChange={event => setHeatmapYear(Number(event.target.value))}>
               {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
             </select>
             <select style={styles.smallSelect} value={heatmapMetric} onChange={event => setHeatmapMetric(event.target.value as HeatmapMetric)}>
-              <option value="highValue">High-value Time</option>
-              <option value="golden">Golden Time</option>
-              <option value="waste">Waste Time</option>
-              <option value="productiveRatio">Productive Ratio</option>
-              <option value="actual">Actual Time</option>
+              <option value="highValue">高价值时间</option>
+              <option value="golden">黄金时间</option>
+              <option value="waste">浪费时间</option>
+              <option value="productiveRatio">高效占比</option>
+              <option value="actual">实际时间</option>
             </select>
             <button style={styles.exportBtn} onClick={() => downloadCsv('year-heatmap.csv', heatmapCsv)}>CSV</button>
-            <button style={{ ...styles.exportBtn, opacity: 0.45, cursor: 'not-allowed' }} title="PNG export TODO" disabled>PNG</button>
+            <button style={{ ...styles.exportBtn, opacity: 0.45, cursor: 'not-allowed' }} title="PNG 导出（开发中）" disabled>PNG</button>
           </div>
         </div>
 
         {!heatmapHasData ? (
-          <div style={styles.yearHeatmapEmpty}>No actual time recorded for this year</div>
+          <div style={styles.yearHeatmapEmpty}>今年还没有记录实际时间</div>
         ) : (
           <div style={styles.yearHeatmapScroll}>
             <div
@@ -642,9 +649,9 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
                       const tooltip = [
                         `${cell.dateStr} ${weekdays[mondayWeekdayIndex(cell.dateStr)]}`,
                         `${heatmapMetricLabels[heatmapMetric]}: ${heatmapValueText(heatmapMetric, metricMinutes, cell.ratio)}`,
-                        `High-value Time: ${fmtHoursAbs(cell.stats.highValue)}`,
-                        `Golden Time: ${fmtHoursAbs(cell.stats.golden)}`,
-                        `Waste Time: ${fmtHoursAbs(cell.stats.waste)}`,
+                        `高价值时间: ${fmtHoursAbs(cell.stats.highValue)}`,
+                        `黄金时间: ${fmtHoursAbs(cell.stats.golden)}`,
+                        `浪费时间: ${fmtHoursAbs(cell.stats.waste)}`,
                       ].join('\n')
                       return (
                         <span
@@ -664,64 +671,64 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
               </div>
             </div>
             <div style={styles.yearHeatmapLegend}>
-              <span>Less</span>
+              <span>少</span>
               {heatmapScales[heatmapMetric].map((color, index) => (
-                <span key={color} style={{ ...styles.yearHeatmapLegendCell, background: color }} title={`Level ${index}`} />
+                <span key={color} style={{ ...styles.yearHeatmapLegendCell, background: color }} title={`等级 ${index}`} />
               ))}
-              <span>More</span>
+              <span>多</span>
             </div>
           </div>
         )}
       </section>
 
       <div style={styles.kpiGrid}>
-        <Kpi label="Total Actual Time" value={fmtHoursAbs(actualMinutes)} />
-        <Kpi label="Total Planned Time" value={fmtHoursAbs(plannedMinutes)} />
-        <Kpi label="Difference" value={fmtHours(actualMinutes - plannedMinutes)} tone={actualMinutes - plannedMinutes >= 0 ? 'good' : 'bad'} />
-        <Kpi label="High-value Time" value={fmtHoursAbs(highValueMinutes)} />
-        <Kpi label="Golden Time" value={fmtHoursAbs(goldenMinutes)} />
-        <Kpi label="Waste Time" value={fmtHoursAbs(wasteMinutes)} tone="bad" />
+        <Kpi label="总实际时间" value={fmtHoursAbs(actualMinutes)} />
+        <Kpi label="总计划时间" value={fmtHoursAbs(plannedMinutes)} />
+        <Kpi label="差值" value={fmtHours(actualMinutes - plannedMinutes)} tone={actualMinutes - plannedMinutes >= 0 ? 'good' : 'bad'} />
+        <Kpi label="高价值时间" value={fmtHoursAbs(highValueMinutes)} />
+        <Kpi label="黄金时间" value={fmtHoursAbs(goldenMinutes)} />
+        <Kpi label="浪费时间" value={fmtHoursAbs(wasteMinutes)} tone="bad" />
       </div>
 
       <div style={styles.longTermWrap}>
         <ChartCard
-          title="Long-term Trend"
+          title="长期趋势"
           controls={
             <>
               <select style={styles.smallSelect} value={longTermGroupBy} onChange={event => setLongTermGroupBy(event.target.value as LongTermGroupBy)}>
-                <option value="category">Category</option>
-                <option value="project">Project</option>
-                <option value="valueLevel">Value Level</option>
-                <option value="energyValue">Energy × Value</option>
+                <option value="category">分类</option>
+                <option value="project">项目</option>
+                <option value="valueLevel">价值等级</option>
+                <option value="energyValue">精力 × 价值</option>
               </select>
               <select style={styles.smallSelect} value={longTermGranularity} onChange={event => setLongTermGranularity(event.target.value as LongTermGranularity)}>
-                <option value="day">Day</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
+                <option value="day">日</option>
+                <option value="week">周</option>
+                <option value="month">月</option>
               </select>
               <select style={styles.smallSelect} value={longTermDataType} onChange={event => setLongTermDataType(event.target.value as DataType)}>
-                <option value="actual">Actual</option>
-                <option value="plan">Planned</option>
-                <option value="both">Both</option>
+                <option value="actual">实际</option>
+                <option value="plan">计划</option>
+                <option value="both">两者</option>
               </select>
               <button
                 style={{ ...styles.segmentBtn, ...(showDeadlines ? styles.segmentBtnActive : {}) }}
                 onClick={() => setShowDeadlines(value => !value)}
               >
-                Deadlines {showDeadlines ? 'On' : 'Off'}
+                截止日期 {showDeadlines ? '开启' : '关闭'}
               </button>
             </>
           }
           onCsv={() => downloadCsv('long-term-trend.csv', longTermCsv)}
         >
           {!longTermHasData ? (
-            <div style={styles.longTermEmpty}>No time data for this range yet.</div>
+            <div style={styles.longTermEmpty}>这个时间范围内还没有数据。</div>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <AreaChart data={longTerm.rows} margin={{ top: 18, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip content={<LongTermTooltip groups={longTerm.groups} />} />
                 <Legend />
                 {longTerm.groups.map(group => (
@@ -754,12 +761,12 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
 
       <div style={styles.chartGrid}>
         <ChartCard
-          title="Time Allocation"
+          title="时间分配"
           controls={
             <select style={styles.smallSelect} value={allocationType} onChange={event => setAllocationType(event.target.value as AllocationChartType)}>
-              <option value="donut">Donut</option>
-              <option value="pie">Pie</option>
-              <option value="bar">Bar</option>
+              <option value="donut">环形图</option>
+              <option value="pie">饼图</option>
+              <option value="bar">柱状图</option>
             </select>
           }
           onCsv={() => downloadCsv('time-allocation.csv', allocationCsv)}
@@ -769,9 +776,9 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
               <BarChart data={allocationData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip formatter={tooltipHours} />
-                <Bar dataKey="hours" name="Time">
+                <Bar dataKey="hours" name="时长">
                   {allocationData.map(row => <Cell key={row.id} fill={row.color} />)}
                 </Bar>
               </BarChart>
@@ -797,12 +804,12 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
         </ChartCard>
 
         <ChartCard
-          title="Trend"
+          title="趋势"
           controls={
             <select style={styles.smallSelect} value={trendType} onChange={event => setTrendType(event.target.value as TrendChartType)}>
-              <option value="line">Line</option>
-              <option value="bar">Bar</option>
-              <option value="area">Area</option>
+              <option value="line">折线图</option>
+              <option value="bar">柱状图</option>
+              <option value="area">面积图</option>
             </select>
           }
           onCsv={() => downloadCsv('trend.csv', trendCsv)}
@@ -812,67 +819,67 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
               <BarChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip formatter={tooltipHours} />
                 <Legend />
-                <Bar dataKey="actual" fill="var(--primary)" />
-                <Bar dataKey="planned" fill="#93c5fd" />
-                <Bar dataKey="highValue" fill="var(--golden)" />
-                <Bar dataKey="waste" fill="var(--waste)" />
+                <Bar dataKey="actual" name="实际" fill="var(--primary)" />
+                <Bar dataKey="planned" name="计划" fill="#93c5fd" />
+                <Bar dataKey="highValue" name="高价值" fill="var(--golden)" />
+                <Bar dataKey="waste" name="浪费" fill="var(--waste)" />
               </BarChart>
             ) : trendType === 'area' ? (
               <AreaChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip formatter={tooltipHours} />
                 <Legend />
-                <Area type="monotone" dataKey="actual" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.14} />
-                <Area type="monotone" dataKey="planned" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.12} />
-                <Area type="monotone" dataKey="highValue" stroke="var(--golden)" fill="var(--golden)" fillOpacity={0.14} />
-                <Area type="monotone" dataKey="waste" stroke="var(--waste)" fill="var(--waste)" fillOpacity={0.14} />
+                <Area type="monotone" dataKey="actual" name="实际" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.14} />
+                <Area type="monotone" dataKey="planned" name="计划" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.12} />
+                <Area type="monotone" dataKey="highValue" name="高价值" stroke="var(--golden)" fill="var(--golden)" fillOpacity={0.14} />
+                <Area type="monotone" dataKey="waste" name="浪费" stroke="var(--waste)" fill="var(--waste)" fillOpacity={0.14} />
               </AreaChart>
             ) : (
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip formatter={tooltipHours} />
                 <Legend />
-                <Line type="monotone" dataKey="actual" stroke="var(--primary)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="planned" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="highValue" stroke="var(--golden)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="waste" stroke="var(--waste)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="actual" name="实际" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="planned" name="计划" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="highValue" name="高价值" stroke="var(--golden)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="waste" name="浪费" stroke="var(--waste)" strokeWidth={2} dot={false} />
               </LineChart>
             )}
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Planned vs Actual" onCsv={() => downloadCsv('planned-vs-actual.csv', plannedActualCsv)}>
+        <ChartCard title="计划与实际对比" onCsv={() => downloadCsv('planned-vs-actual.csv', plannedActualCsv)}>
           {plannedVsActual.length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={plannedVsActual}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={value => `${value}h`} />
+                <YAxis tickFormatter={value => `${value}小时`} />
                 <Tooltip formatter={tooltipHours} />
                 <Legend />
-                <Bar dataKey="planned" fill="#93c5fd" />
-                <Bar dataKey="actual" fill="var(--primary)" />
+                <Bar dataKey="planned" name="计划" fill="#93c5fd" />
+                <Bar dataKey="actual" name="实际" fill="var(--primary)" />
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Project Ranking" onCsv={() => downloadCsv('project-ranking.csv', rankingCsv)}>
+        <ChartCard title="项目排名" onCsv={() => downloadCsv('project-ranking.csv', rankingCsv)}>
           {projectRanking.length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={projectRanking} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
-                <XAxis type="number" tickFormatter={value => `${value}h`} />
+                <XAxis type="number" tickFormatter={value => `${value}小时`} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={90} />
                 <Tooltip formatter={tooltipHours} />
-                <Bar dataKey="actual" name="Actual">
+                <Bar dataKey="actual" name="实际">
                   {projectRanking.map(row => <Cell key={row.name} fill={row.color} />)}
                 </Bar>
               </BarChart>
@@ -882,10 +889,10 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
       </div>
 
       <div style={styles.tablesGrid}>
-        <DetailTable title="By Category">
-          {byCat.length === 0 ? <p style={styles.empty}>No data for this period</p> : (
+        <DetailTable title="按分类">
+          {byCat.length === 0 ? <p style={styles.empty}>这个时间段暂无数据</p> : (
             <table style={styles.table}>
-              <thead><tr><th style={styles.th}>Category</th><th style={styles.th}>Planned</th><th style={styles.th}>Actual</th><th style={styles.th}>Diff</th></tr></thead>
+              <thead><tr><th style={styles.th}>分类</th><th style={styles.th}>计划</th><th style={styles.th}>实际</th><th style={styles.th}>差值</th></tr></thead>
               <tbody>
                 {byCat.map(({ cat, planned, actual, diff }) => (
                   <tr key={cat.id}>
@@ -900,15 +907,15 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
           )}
         </DetailTable>
 
-        <DetailTable title="By Project">
-          {byProj.length === 0 ? <p style={styles.empty}>No data for this period</p> : (
+        <DetailTable title="按项目">
+          {byProj.length === 0 ? <p style={styles.empty}>这个时间段暂无数据</p> : (
             <table style={styles.table}>
-              <thead><tr><th style={styles.th}>Project</th><th style={styles.th}>Category</th><th style={styles.th}>Planned</th><th style={styles.th}>Actual</th><th style={styles.th}>Diff</th></tr></thead>
+              <thead><tr><th style={styles.th}>项目</th><th style={styles.th}>分类</th><th style={styles.th}>计划</th><th style={styles.th}>实际</th><th style={styles.th}>差值</th></tr></thead>
               <tbody>
                 {byProj.map(({ proj, cat, planned, actual, diff }) => (
                   <tr key={proj.id}>
                     <td style={styles.td}>{proj.name}</td>
-                    <td style={styles.td}>{cat ? <><Dot color={cat.color} />{cat.name}</> : 'Unknown'}</td>
+                    <td style={styles.td}>{cat ? <><Dot color={cat.color} />{cat.name}</> : '未知'}</td>
                     <td style={styles.td}>{fmtHoursAbs(planned)}</td>
                     <td style={styles.td}>{fmtHoursAbs(actual)}</td>
                     <td style={{ ...styles.td, color: diff >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>{fmtHours(diff)}</td>
@@ -940,7 +947,7 @@ function ChartCard({ title, children, controls, onCsv }: { title: string; childr
         <div style={styles.chartActions}>
           {controls}
           <button style={styles.exportBtn} onClick={onCsv}>CSV</button>
-          <button style={{ ...styles.exportBtn, opacity: 0.45, cursor: 'not-allowed' }} title="PNG export TODO" disabled>PNG</button>
+          <button style={{ ...styles.exportBtn, opacity: 0.45, cursor: 'not-allowed' }} title="PNG 导出（开发中）" disabled>PNG</button>
         </div>
       </div>
       {children}
@@ -962,7 +969,7 @@ function Dot({ color }: { color: string }) {
 }
 
 function EmptyChart() {
-  return <div style={styles.emptyChart}>No chart data for this selection</div>
+  return <div style={styles.emptyChart}>当前筛选条件下没有图表数据</div>
 }
 
 function LongTermTooltip({
@@ -984,7 +991,7 @@ function LongTermTooltip({
   return (
     <div style={styles.longTermTooltip}>
       <strong>{label}</strong>
-      <span style={styles.tooltipMuted}>Total {fmtHoursAbs(totalMinutes)}</span>
+      <span style={styles.tooltipMuted}>合计 {fmtHoursAbs(totalMinutes)}</span>
       {groups.map(group => {
         const hours = Number(row[group.id] ?? 0)
         const minutes = Math.round(hours * 60)
@@ -1011,7 +1018,7 @@ const styles: Record<string, React.CSSProperties> = {
   filterLabel: { fontSize: 12, color: 'var(--text-secondary)', fontWeight: 800 },
   rangeRow: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   rangeBtn: { padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 700 },
-  rangeBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: '#c7d2fe' },
+  rangeBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: 'var(--border)' },
   filterGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 10 },
   label: { display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700 },
   input: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface)' },
@@ -1034,7 +1041,7 @@ const styles: Record<string, React.CSSProperties> = {
   kpiValue: { fontSize: 22 },
   longTermWrap: { marginBottom: 14 },
   segmentBtn: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface)', color: 'var(--text-secondary)', padding: '6px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
-  segmentBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: '#c7d2fe' },
+  segmentBtnActive: { background: 'var(--primary-soft)', color: 'var(--primary)', borderColor: 'var(--border)' },
   longTermEmpty: { height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 },
   longTermTooltip: { display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 10, background: 'var(--surface)', boxShadow: 'var(--shadow-card)', color: 'var(--text-primary)', fontSize: 12 },
   tooltipMuted: { color: 'var(--text-secondary)', fontWeight: 700 },
