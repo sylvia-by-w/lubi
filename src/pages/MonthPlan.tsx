@@ -183,7 +183,7 @@ export default function MonthPlan({
     <div style={styles.page}>
       <div style={styles.header}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <h1 style={styles.title}>月计划</h1>
+          <h1 style={styles.title}>月度计划</h1>
           <input
             style={styles.quoteInput}
             placeholder="这个月想对自己说的话…"

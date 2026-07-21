@@ -62,23 +62,23 @@ export default function NavBar({
         <button
           style={{ ...styles.tab, ...(currentPage === 'weekly' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('weekly')}
-        >周视图</button>
+        >时间日志</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'board' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('board')}
-        >看板</button>
+        >任务看板</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'month' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('month')}
-        >月计划</button>
+        >月度计划</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'projects' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('projects')}
-        >项目</button>
+        >项目管理</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'statistics' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('statistics')}
-        >统计</button>
+        >统计分析</button>
       </div>
 
       <div style={styles.right}>

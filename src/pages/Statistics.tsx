@@ -534,7 +534,7 @@ export default function Statistics({ tasks, categories, projects, deadlines }: P
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>统计</h1>
+          <h1 style={styles.title}>统计分析</h1>
           <p style={styles.subtitle}>{start} 至 {end}</p>
         </div>
       </div>

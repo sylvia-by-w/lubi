@@ -281,7 +281,7 @@ export default function Board({
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>看板</h1>
+          <h1 style={styles.title}>任务看板</h1>
           <p style={styles.subtitle}>所有任务都在这里管理。实际花费的时间仍会同步到周视图和统计页。</p>
         </div>
         <div style={styles.summaryRow}>

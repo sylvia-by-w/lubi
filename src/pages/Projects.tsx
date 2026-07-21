@@ -214,7 +214,7 @@ export default function Projects({
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>项目</h1>
+          <h1 style={styles.title}>项目管理</h1>
           <p style={styles.subtitle}>长期目标、里程碑与投入时间。</p>
         </div>
         <div style={styles.filterRow}>
