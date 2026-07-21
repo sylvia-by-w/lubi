@@ -104,6 +104,8 @@ export default function Board({
   const [habitName, setHabitName] = useState('')
   const [habitCategoryId, setHabitCategoryId] = useState('')
   const [showArchivedHabits, setShowArchivedHabits] = useState(false)
+  const [quickAddDs, setQuickAddDs] = useState<string | null>(null)
+  const [quickAddText, setQuickAddText] = useState('')
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayStr = fmtDate(startOfToday())
@@ -180,6 +182,17 @@ export default function Board({
       completedAt: done ? undefined : new Date().toISOString(),
     })
   }
+
+  const dayTasksMap = weekDays.map(d => { const ds = fmtDate(d); return { ds, list: tasksForDay(ds) } })
+  const maxSlots = Math.max(4, ...dayTasksMap.map(d => d.list.length + 1))
+
+  const submitQuickAdd = (ds: string) => {
+    const title = quickAddText.trim()
+    if (title) onAddProjectTask({ title, status: 'todo', dueDate: ds })
+    setQuickAddDs(null)
+    setQuickAddText('')
+  }
+  const cancelQuickAdd = () => { setQuickAddDs(null); setQuickAddText('') }
 
   return (
     <div style={styles.page}>
@@ -338,42 +351,81 @@ export default function Board({
             </div>
             <p style={styles.hint}>按截止日期落在每一天的任务，勾选即完成。没有截止日期的任务留在左侧任务清单里。</p>
 
-            <div style={styles.dayGrid}>
-              {weekDays.map((d, i) => {
-                const ds = fmtDate(d)
-                const isToday = ds === todayStr
-                const dayTasks = tasksForDay(ds)
-                const doneCount = dayTasks.filter(t => t.status === 'done').length
-                const total = dayTasks.length
-                const pct = total ? doneCount / total : 0
-                return (
-                  <div key={ds} style={{ ...styles.dayCard, ...(isToday ? styles.dayCardToday : {}) }}>
-                    <div style={styles.dayCardHeader}>
-                      <div>
-                        <p style={styles.dayCardWeekday}>周{WEEKDAY_LABEL[i]}{isToday ? ' · 今天' : ''}</p>
-                        <p style={styles.dayCardDate}>{d.getMonth() + 1}/{d.getDate()}</p>
-                      </div>
-                      <DayDonut pct={pct} />
-                    </div>
-                    <div style={styles.dayCardList}>
-                      {dayTasks.map(task => {
-                        const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
-                        const done = task.status === 'done'
-                        return (
-                          <label key={task.id} style={styles.dayTaskRow}>
-                            <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
-                            <span style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }} title={task.title}>{task.title}</span>
-                            {project && <span style={styles.projectTag}>{project.name}</span>}
-                          </label>
-                        )
-                      })}
-                      {dayTasks.length === 0 && <p style={styles.emptyText}>这天没有安排任务。</p>}
-                    </div>
-                    <div style={styles.dayCardFooter}>完成率 {Math.round(pct * 100)}% · 已完成 {doneCount} · 未完成 {total - doneCount}</div>
-                  </div>
-                )
-              })}
-            </div>
+            <table style={styles.dayTable}>
+              <thead>
+                <tr>
+                  {weekDays.map((d, i) => {
+                    const ds = fmtDate(d)
+                    const isToday = ds === todayStr
+                    return (
+                      <th key={ds} style={{ ...styles.dayTh, ...(isToday ? styles.dayThToday : {}) }}>
+                        周{WEEKDAY_LABEL[i]}{isToday ? ' · 今天' : ''}<br />{d.getMonth() + 1}/{d.getDate()}
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: maxSlots }).map((_, rowIdx) => (
+                  <tr key={rowIdx}>
+                    {dayTasksMap.map(({ ds, list }) => {
+                      const isToday = ds === todayStr
+                      const task = list[rowIdx]
+                      const isAddSlot = !task && rowIdx === list.length
+                      const project = task?.projectId ? projects.find(p => p.id === task.projectId) : undefined
+                      const done = task?.status === 'done'
+                      return (
+                        <td key={ds} style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}>
+                          {task && (
+                            <label style={styles.dayTaskRow}>
+                              <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
+                              <span style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }} title={task.title}>{task.title}</span>
+                              {project && <span style={styles.projectTag}>{project.name}</span>}
+                            </label>
+                          )}
+                          {!task && isAddSlot && (
+                            quickAddDs === ds ? (
+                              <input
+                                autoFocus
+                                style={styles.dayQuickInput}
+                                value={quickAddText}
+                                onChange={e => setQuickAddText(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') submitQuickAdd(ds)
+                                  if (e.key === 'Escape') cancelQuickAdd()
+                                }}
+                                onBlur={() => submitQuickAdd(ds)}
+                                placeholder="输入后回车"
+                              />
+                            ) : (
+                              <button style={styles.dayAddSlot} onClick={() => { setQuickAddDs(ds); setQuickAddText('') }}>+ 添加</button>
+                            )
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  {dayTasksMap.map(({ ds, list }) => {
+                    const doneCount = list.filter(t => t.status === 'done').length
+                    const total = list.length
+                    const pct = total ? Math.round((doneCount / total) * 100) : 0
+                    return (
+                      <td
+                        key={ds}
+                        style={styles.dayTf}
+                        title={total ? `完成率 ${pct}% · 已完成 ${doneCount} · 未完成 ${total - doneCount}` : '这天没有安排任务'}
+                      >
+                        {total ? `${pct}% · ${doneCount}/${total - doneCount}` : '-'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tfoot>
+            </table>
           </section>
         </div>
 
@@ -497,25 +549,6 @@ function MonthDonut({ pct }: { pct: number }) {
   )
 }
 
-function DayDonut({ pct }: { pct: number }) {
-  const r = 15
-  const c = 2 * Math.PI * r
-  const clamped = Math.max(0, Math.min(1, pct))
-  return (
-    <svg width="38" height="38" viewBox="0 0 38 38">
-      <circle cx="19" cy="19" r={r} fill="none" stroke="var(--border-soft)" strokeWidth={5} />
-      <circle
-        cx="19" cy="19" r={r} fill="none" stroke="var(--primary)" strokeWidth={5}
-        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * clamped}
-        transform="rotate(-90 19 19)"
-      />
-      <text x="19" y="23" textAnchor="middle" fontSize="10" fontWeight={700} fill="var(--text-primary)">
-        {Math.round(clamped * 100)}%
-      </text>
-    </svg>
-  )
-}
-
 function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.summaryMetric}>
@@ -580,15 +613,15 @@ const styles: Record<string, CSSProperties> = {
   habitBarFill: { height: '100%', borderRadius: 3 },
   archiveBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '3px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   archivedToggle: { border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 },
-  dayGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 },
-  dayCard: { border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-soft)', padding: 10, display: 'flex', flexDirection: 'column', minHeight: 220 },
-  dayCardToday: { border: '1px solid var(--primary)', background: 'var(--primary-soft)' },
-  dayCardHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 4, marginBottom: 8 },
-  dayCardWeekday: { margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-primary)' },
-  dayCardDate: { margin: '2px 0 0', fontSize: 11, color: 'var(--text-muted)' },
-  dayCardList: { display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflow: 'auto' },
   dayTaskRow: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' },
   dayTaskTitle: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' },
   projectTag: { fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'var(--surface-muted)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 },
-  dayCardFooter: { marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--border-soft)', fontSize: 10, color: 'var(--text-secondary)' },
+  dayTable: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 },
+  dayTh: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontWeight: 700, fontSize: 10, textAlign: 'center', lineHeight: 1.4, color: 'var(--text-secondary)' },
+  dayThToday: { background: 'var(--primary-soft)', color: 'var(--primary)' },
+  dayTd: { border: '1px solid var(--border-soft)', padding: '5px 6px', verticalAlign: 'top', height: 26 },
+  dayTdToday: { background: '#fffbe6' },
+  dayQuickInput: { width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', font: 'inherit', fontSize: 11, boxSizing: 'border-box' },
+  dayAddSlot: { border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', padding: 0 },
+  dayTf: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontSize: 10, textAlign: 'center', color: 'var(--text-secondary)' },
 }
