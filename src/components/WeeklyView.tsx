@@ -263,7 +263,21 @@ function useAIReviews() {
     })
   }
 
-  return { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview, saveReviewNote }
+  const deleteReview = (review: AIReview) => {
+    const key = review.scope === 'daily' ? review.date : review.weekStart
+    if (!key) return
+
+    const updater = review.scope === 'daily' ? setDailyReviews : setWeeklyReviews
+    const storageKey = review.scope === 'daily' ? AI_DAILY_REVIEWS_KEY : AI_WEEKLY_REVIEWS_KEY
+    updater(prev => {
+      const next = { ...prev }
+      delete next[key]
+      saveRecord(storageKey, next)
+      return next
+    })
+  }
+
+  return { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview, saveReviewNote, deleteReview }
 }
 
 export default function WeeklyView({
@@ -287,7 +301,7 @@ export default function WeeklyView({
     ? selectedDateState
     : defaultSelectedDate
   const weekEnd = formatDate(days[days.length - 1])
-  const { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview, saveReviewNote } = useAIReviews()
+  const { dailyReviews, weeklyReviews, saveDailyReview, saveWeeklyReview, saveReviewNote, deleteReview } = useAIReviews()
   const [aiLoading, setAiLoading] = useState<'daily' | 'weekly' | null>(null)
   const [aiError, setAiError] = useState('')
 
@@ -525,12 +539,14 @@ export default function WeeklyView({
               review={dailyAIResult}
               emptyText="为选中的日期生成一份每日回顾。"
               onSaveNote={saveReviewNote}
+              onDelete={deleteReview}
             />
             <AIReviewCard
               title={`每周回顾（${formatWeekRange(weekStart, days[days.length - 1])}）`}
               review={weeklyAIResult}
               emptyText="为本周生成一份每周回顾。"
               onSaveNote={saveReviewNote}
+              onDelete={deleteReview}
             />
           </div>
         </section>
@@ -743,11 +759,13 @@ function AIReviewCard({
   review,
   emptyText,
   onSaveNote,
+  onDelete,
 }: {
   title: string
   review?: AIReview
   emptyText: string
   onSaveNote: (review: AIReview, userNote: string) => void
+  onDelete: (review: AIReview) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editingNote, setEditingNote] = useState(false)
@@ -781,9 +799,17 @@ function AIReviewCard({
           {review && <small>{new Date(review.updatedAt ?? review.createdAt).toLocaleString('zh-CN')}</small>}
         </div>
         {review && (
-          <button className="text-button" onClick={startEditing}>
-            {review.userNote ? '编辑备注' : '添加备注'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button className="text-button" onClick={startEditing}>
+              {review.userNote ? '编辑备注' : '添加备注'}
+            </button>
+            <button
+              className="text-button"
+              onClick={() => { if (confirm('删除这份回顾？')) onDelete(review) }}
+            >
+              删除
+            </button>
+          </div>
         )}
       </div>
 

@@ -49,21 +49,21 @@ function fmtMinutes(minutes: number) {
   const h = Math.floor(abs / 60)
   const m = abs % 60
   const sign = minutes < 0 ? '-' : minutes > 0 ? '+' : ''
-  const body = h === 0 ? `${m}min` : m === 0 ? `${h}h` : `${h}h${m}min`
+  const body = h === 0 ? `${m}分钟` : m === 0 ? `${h}小时` : `${h}小时${m}分钟`
   return `${sign}${body}`
 }
 
 function listTasks(tasks: ReviewTask[]) {
-  if (tasks.length === 0) return '- None'
+  if (tasks.length === 0) return '- 无'
   return tasks
-    .map(t => `- ${t.name} (${t.category}${t.project ? ` / ${t.project}` : ''}) ${t.startTime}-${t.endTime}, ${fmtMinutes(t.durationMinutes)}`)
+    .map(t => `- ${t.name}（${t.category}${t.project ? ` / ${t.project}` : ''}）${t.startTime}-${t.endTime}，${fmtMinutes(t.durationMinutes)}`)
     .join('\n')
 }
 
 function listTotals(totals: ReviewTotal[]) {
-  if (totals.length === 0) return '- None'
+  if (totals.length === 0) return '- 无'
   return totals
-    .map(t => `- ${t.name}: planned ${fmtMinutes(t.planned)}, actual ${fmtMinutes(t.actual)}, diff ${fmtMinutes(t.diff)}`)
+    .map(t => `- ${t.name}：计划 ${fmtMinutes(t.planned)}，实际 ${fmtMinutes(t.actual)}，差值 ${fmtMinutes(t.diff)}`)
     .join('\n')
 }
 
@@ -127,16 +127,16 @@ function mockDailyOutput(data: DailyReviewData) {
   const biggest = data.biggestDeviations[0]
 
   return [
-    `Summary: Planned ${fmtMinutes(totalPlanned)} and recorded ${fmtMinutes(totalActual)} of actual time on ${data.date}.`,
+    `概览：${data.date} 计划 ${fmtMinutes(totalPlanned)}，实际记录 ${fmtMinutes(totalActual)}。`,
     biggest
-      ? `Main deviation: ${biggest.name} changed by ${fmtMinutes(biggest.diff)} versus plan.`
-      : 'Main deviation: No meaningful planned-vs-actual deviation was found.',
+      ? `主要偏差：${biggest.name} 与计划相差 ${fmtMinutes(biggest.diff)}。`
+      : '主要偏差：没有发现明显的计划与实际差异。',
     data.userNote
-      ? `Likely cause: Your note adds context: "${data.userNote}".`
-      : 'Likely cause: Add a short deviation reason to make the next review more precise.',
+      ? `可能原因：你的备注提供了背景——"${data.userNote}"。`
+      : '可能原因：加一句简短的偏差原因，能让下次回顾更准确。',
     data.userNote
-      ? 'Tomorrow adjustment: Convert the note into one concrete scheduling correction before starting the next day.'
-      : 'Tomorrow adjustment: Choose one concrete scheduling correction before starting the day.',
+      ? '明日调整：把这条备注转化成一个具体的日程调整动作。'
+      : '明日调整：开始明天之前，先定一个具体的日程调整动作。',
   ].join('\n\n')
 }
 
@@ -147,19 +147,19 @@ function mockWeeklyOutput(data: WeeklyReviewData) {
   const biggest = data.biggestDeviations[0]
 
   return [
-    `Weekly pattern: You recorded ${fmtMinutes(totalActual)} of actual time from ${data.weekStart} to ${data.weekEnd}.`,
+    `本周规律：从 ${data.weekStart} 到 ${data.weekEnd}，共记录实际时间 ${fmtMinutes(totalActual)}。`,
     topCategory
-      ? `Allocation insight: ${topCategory.name} took the largest share at ${fmtMinutes(topCategory.actual)}.`
-      : 'Allocation insight: There is not enough actual time data to identify a dominant category.',
+      ? `分配洞察：${topCategory.name} 占比最大，共 ${fmtMinutes(topCategory.actual)}。`
+      : '分配洞察：实际时间数据还不够多，看不出主要占用的分类。',
     topProject
-      ? `Project focus: ${topProject.name} was the main project with ${fmtMinutes(topProject.actual)} actual time.`
-      : 'Project focus: No project has actual time recorded yet.',
+      ? `项目聚焦：${topProject.name} 是本周投入最多的项目，共 ${fmtMinutes(topProject.actual)}。`
+      : '项目聚焦：本周还没有项目记录实际时间。',
     biggest
-      ? `Biggest deviation: ${biggest.name} differed from plan by ${fmtMinutes(biggest.diff)}.`
-      : 'Biggest deviation: No planned-vs-actual comparison is available yet.',
+      ? `最大偏差：${biggest.name} 与计划相差 ${fmtMinutes(biggest.diff)}。`
+      : '最大偏差：暂时没有可比较的计划与实际数据。',
     data.userNote
-      ? `Next week adjustment: Turn this note into a rule: ${data.userNote}`
-      : 'Next week adjustment: Write one weekly finding, then convert it into a planning rule.',
+      ? `下周调整：把这条备注转化成一条规则——${data.userNote}`
+      : '下周调整：写一条本周的发现，再把它转化成一条计划规则。',
   ].join('\n\n')
 }
 
