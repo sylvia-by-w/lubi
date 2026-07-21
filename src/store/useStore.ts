@@ -173,6 +173,14 @@ export function useStore() {
     setHabitLogs(prev => prev.filter(l => l.habitId !== id))
   }
 
+  const archiveHabit = (id: string) => {
+    updateHabit(id, { archived: true })
+  }
+
+  const unarchiveHabit = (id: string) => {
+    updateHabit(id, { archived: false })
+  }
+
   const toggleHabitLog = (habitId: string, date: string) => {
     setHabitLogs(prev => {
       const existing = prev.find(l => l.habitId === habitId && l.date === date)
@@ -212,7 +220,7 @@ export function useStore() {
     addProjectTask, updateProjectTask, deleteProjectTask,
     addTask, updateTask, deleteTask,
     addDeadline, updateDeadline, deleteDeadline,
-    addHabit, updateHabit, deleteHabit, toggleHabitLog,
+    addHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog,
     upsertMonthlyNote,
     exportAllData, importAllData,
   }

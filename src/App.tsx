@@ -39,7 +39,7 @@ export default function App() {
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addDeadline, updateDeadline, deleteDeadline,
-    addHabit, deleteHabit, toggleHabitLog, upsertMonthlyNote,
+    addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote,
     exportAllData, importAllData
   } = useStore()
 
@@ -135,6 +135,8 @@ export default function App() {
           onLogTime={handleLogTime}
           onAddHabit={addHabit}
           onDeleteHabit={deleteHabit}
+          onArchiveHabit={archiveHabit}
+          onUnarchiveHabit={unarchiveHabit}
           onToggleHabitLog={toggleHabitLog}
         />
       ) : page === 'month' ? (

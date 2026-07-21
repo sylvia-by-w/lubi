@@ -1,6 +1,7 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
 import { timeToMinutes } from '../utils/time'
+import HabitDragToggle from '../components/HabitDragToggle'
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -14,6 +15,8 @@ interface Props {
   onLogTime: (task: ProjectTask, date: string, existingBlock?: TaskBlock) => void
   onAddHabit: (habit: Omit<HabitItem, 'id' | 'createdAt'>) => void
   onDeleteHabit: (id: string) => void
+  onArchiveHabit: (id: string) => void
+  onUnarchiveHabit: (id: string) => void
   onToggleHabitLog: (habitId: string, date: string) => void
   habitLogs: { id: string; habitId: string; date: string }[]
 }
@@ -23,6 +26,7 @@ const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
 const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
 type RowMode = 'task' | 'category' | 'habit'
 const ROW_MODE_LABEL: Record<RowMode, string> = { task: '任务', category: '分类', habit: '习惯' }
+const GRID_STALE_DAYS = 14
 
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -69,6 +73,10 @@ function daysElapsedInMonth(d: Date) {
   }
   return today.getDate()
 }
+function isStaleDone(task: ProjectTask) {
+  if (task.status !== 'done' || !task.completedAt) return false
+  return (startOfToday().getTime() - new Date(task.completedAt).getTime()) > GRID_STALE_DAYS * 86400000
+}
 function cycleTimeDays(task: ProjectTask): number | null {
   if (task.status !== 'done' || !task.completedAt) return null
   const start = new Date(task.createdAt).getTime()
@@ -89,7 +97,7 @@ const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDa
 export default function Board({
   projectTasks, categories, projects, tasks, habits, habitLogs,
   onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask, onLogTime,
-  onAddHabit, onDeleteHabit, onToggleHabitLog,
+  onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit, onToggleHabitLog,
 }: Props) {
   const [rangeStart, setRangeStart] = useState(() => startOfToday())
   const [form, setForm] = useState<NewTaskForm>({ ...emptyForm, categoryId: categories[0]?.id ?? '' })
@@ -97,6 +105,8 @@ export default function Board({
   const [rowMode, setRowMode] = useState<RowMode>('task')
   const [habitName, setHabitName] = useState('')
   const [habitCategoryId, setHabitCategoryId] = useState('')
+  const [hideOldGridDone, setHideOldGridDone] = useState(true)
+  const [showArchivedHabits, setShowArchivedHabits] = useState(false)
 
   const days = Array.from({ length: RANGE_DAYS }, (_, i) => addDays(rangeStart, i))
   const todayStr = fmtDate(startOfToday())
@@ -106,6 +116,7 @@ export default function Board({
     .sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'))
 
   const activeHabits = habits.filter(h => !h.archived)
+  const archivedHabits = habits.filter(h => h.archived)
   const actualEntries = tasks.filter(t => t.type === 'actual')
 
   const monthStart = startOfMonth(startOfToday())
@@ -167,13 +178,17 @@ export default function Board({
       .reduce((sum, e) => sum + Math.max(0, timeToMinutes(e.endTime) - timeToMinutes(e.startTime)), 0)
   }
 
+  const gridTasks = rowMode === 'task' && hideOldGridDone
+    ? visibleTasks.filter(t => !isStaleDone(t))
+    : visibleTasks
+
   const gridHint =
-    rowMode === 'task' ? '点击圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
+    rowMode === 'task' ? '点击或拖动圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
     : rowMode === 'category' ? '每个分类当天的总投入时间，深浅代表投入多少，来自任务维度下记录的时间块。'
-    : '点击圆点为这个习惯打今天的卡，再点一次可以取消。'
+    : '拖动圆点到右边为这个习惯打今天的卡，拖回左边取消，也可以直接点一下。'
 
   const isEmpty =
-    (rowMode === 'task' && visibleTasks.length === 0) ||
+    (rowMode === 'task' && gridTasks.length === 0) ||
     (rowMode === 'category' && categories.length === 0) ||
     (rowMode === 'habit' && activeHabits.length === 0)
 
@@ -286,7 +301,8 @@ export default function Board({
                           <div style={styles.taskName}>{h.name}</div>
                         </div>
                         <span style={styles.habitStatsLabel}>{stats.done}/{stats.total} · {Math.round(stats.pct * 100)}%</span>
-                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="删除习惯">x</button>
+                        <button style={styles.archiveBtn} onClick={() => onArchiveHabit(h.id)}>归档</button>
+                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="永久删除习惯">x</button>
                       </div>
                       <div style={styles.habitBarTrack}>
                         <div style={{ ...styles.habitBarFill, width: `${Math.round(stats.pct * 100)}%`, background: barColor }} />
@@ -294,6 +310,28 @@ export default function Board({
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {archivedHabits.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <button style={styles.archivedToggle} onClick={() => setShowArchivedHabits(v => !v)}>
+                  {showArchivedHabits ? '收起' : '展开'}已归档习惯 ({archivedHabits.length})
+                </button>
+                {showArchivedHabits && (
+                  <div style={{ ...styles.taskList, marginTop: 8 }}>
+                    {archivedHabits.map(h => (
+                      <div key={h.id} style={styles.taskRow}>
+                        <span style={{ ...styles.dot, background: 'var(--text-muted)' }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ ...styles.taskName, color: 'var(--text-secondary)' }}>{h.name}</div>
+                        </div>
+                        <button style={styles.archiveBtn} onClick={() => onUnarchiveHabit(h.id)}>恢复</button>
+                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="永久删除习惯">x</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -322,6 +360,12 @@ export default function Board({
               ))}
             </div>
 
+            {rowMode === 'task' && (
+              <label style={{ ...styles.hideDoneLabel, marginBottom: 8 }}>
+                <input type="checkbox" checked={hideOldGridDone} onChange={e => setHideOldGridDone(e.target.checked)} />
+                隐藏{GRID_STALE_DAYS}天前已完成的任务
+              </label>
+            )}
             <p style={styles.hint}>{gridHint}</p>
             {isEmpty && (
               <p style={styles.emptyText}>
@@ -341,7 +385,7 @@ export default function Board({
                   )
                 })}
 
-                {rowMode === 'task' && visibleTasks.map(task => {
+                {rowMode === 'task' && gridTasks.map(task => {
                   const cat = taskCategory(task, categories, projects)
                   return (
                     <Fragment key={task.id}>
@@ -401,15 +445,14 @@ export default function Board({
                         return (
                           <div
                             key={habit.id + ds}
-                            style={{ ...styles.cell, ...styles.blockCell, ...(ds === todayStr ? styles.todayCol : {}) }}
-                            title={done ? '已打卡，点击取消' : '点击打卡'}
-                            onClick={() => onToggleHabitLog(habit.id, ds)}
+                            style={{ ...styles.cell, ...(ds === todayStr ? styles.todayCol : {}) }}
                           >
-                            <div style={{
-                              ...styles.dotCell,
-                              background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
-                              border: done ? 'none' : '1.5px solid var(--border-soft)',
-                            }} />
+                            <HabitDragToggle
+                              done={done}
+                              color={cat?.color ?? 'var(--primary)'}
+                              onToggle={() => onToggleHabitLog(habit.id, ds)}
+                              title={done ? '已打卡，拖动或点击取消' : '拖动或点击打卡'}
+                            />
                           </div>
                         )
                       })}
@@ -603,4 +646,6 @@ const styles: Record<string, CSSProperties> = {
   habitStatsLabel: { fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' },
   habitBarTrack: { height: 6, background: 'var(--surface-muted)', borderRadius: 3, overflow: 'hidden' },
   habitBarFill: { height: '100%', borderRadius: 3 },
+  archiveBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '3px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
+  archivedToggle: { border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 },
 }

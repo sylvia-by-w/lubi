@@ -1,6 +1,7 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, HabitLog, MonthlyNote } from '../types'
 import { formatDate } from '../utils/time'
+import HabitDragToggle from '../components/HabitDragToggle'
 
 interface Props {
   habits: HabitItem[]
@@ -202,16 +203,16 @@ export default function MonthPlan({
                                 style={{
                                   ...styles.weekCell,
                                   ...(formatDate(c.date) === todayStr ? styles.weekTodayCell : {}),
-                                  ...(c.inMonth ? { cursor: 'pointer' } : styles.weekOutCell),
+                                  ...(c.inMonth ? {} : styles.weekOutCell),
                                 }}
-                                onClick={() => c.inMonth && onToggleHabitLog(h.id, ds)}
                               >
                                 {c.inMonth && (
-                                  <span style={{
-                                    ...styles.weekDot,
-                                    background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
-                                    border: done ? 'none' : '1.5px solid var(--border-soft)',
-                                  }} />
+                                  <HabitDragToggle
+                                    done={done}
+                                    color={cat?.color ?? 'var(--primary)'}
+                                    onToggle={() => onToggleHabitLog(h.id, ds)}
+                                    title={done ? '已打卡，拖动或点击取消' : '拖动或点击打卡'}
+                                  />
                                 )}
                               </div>
                             )
