@@ -98,6 +98,7 @@ export interface MonthlyNote {
   month: string
   quote?: string
   reminder?: string
+  plan?: string
 }
 
 export interface AppState {

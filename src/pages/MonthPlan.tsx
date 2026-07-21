@@ -1,7 +1,6 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, HabitLog, MonthlyNote } from '../types'
 import { formatDate } from '../utils/time'
-import HabitDragToggle from '../components/HabitDragToggle'
 
 interface Props {
   habits: HabitItem[]
@@ -162,6 +161,16 @@ export default function MonthPlan({
         </div>
       </div>
 
+      <section style={{ ...styles.panel, marginBottom: 18 }}>
+        <h3 style={styles.panelTitle}>本月计划</h3>
+        <textarea
+          style={styles.planTextarea}
+          placeholder="写下这个月想做的事、目标、重点关注的方向…"
+          value={note?.plan ?? ''}
+          onChange={e => onUpsertMonthlyNote(monthKey, { plan: e.target.value })}
+        />
+      </section>
+
       {activeHabits.length === 0 ? (
         <p style={styles.emptyText}>还没有习惯。先去"看板"页左侧的"习惯"面板里加几个，比如早睡、运动、阅读，这里就会按周显示打卡情况。</p>
       ) : (
@@ -203,16 +212,16 @@ export default function MonthPlan({
                                 style={{
                                   ...styles.weekCell,
                                   ...(formatDate(c.date) === todayStr ? styles.weekTodayCell : {}),
-                                  ...(c.inMonth ? {} : styles.weekOutCell),
+                                  ...(c.inMonth ? { cursor: 'pointer' } : styles.weekOutCell),
                                 }}
+                                onClick={() => c.inMonth && onToggleHabitLog(h.id, ds)}
                               >
                                 {c.inMonth && (
-                                  <HabitDragToggle
-                                    done={done}
-                                    color={cat?.color ?? 'var(--primary)'}
-                                    onToggle={() => onToggleHabitLog(h.id, ds)}
-                                    title={done ? '已打卡，拖动或点击取消' : '拖动或点击打卡'}
-                                  />
+                                  <span style={{
+                                    ...styles.weekDot,
+                                    background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
+                                    border: done ? 'none' : '1.5px solid var(--border-soft)',
+                                  }} />
                                 )}
                               </div>
                             )
@@ -318,4 +327,5 @@ const styles: Record<string, CSSProperties> = {
   panel: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: 14, boxShadow: 'var(--shadow-card)' },
   panelTitle: { margin: '0 0 8px', fontSize: 14, color: 'var(--text-primary)', fontWeight: 800 },
   chartBox: { width: '100%', height: 160, display: 'block' },
+  planTextarea: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', font: 'inherit', fontSize: 13, width: '100%', minHeight: 90, resize: 'vertical', color: 'var(--text-primary)', background: 'var(--surface)', boxSizing: 'border-box' },
 }

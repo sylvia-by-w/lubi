@@ -1,7 +1,6 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
 import { timeToMinutes } from '../utils/time'
-import HabitDragToggle from '../components/HabitDragToggle'
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -183,9 +182,9 @@ export default function Board({
     : visibleTasks
 
   const gridHint =
-    rowMode === 'task' ? '点击或拖动圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
+    rowMode === 'task' ? '点击圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
     : rowMode === 'category' ? '每个分类当天的总投入时间，深浅代表投入多少，来自任务维度下记录的时间块。'
-    : '拖动圆点到右边为这个习惯打今天的卡，拖回左边取消，也可以直接点一下。'
+    : '点击圆点为这个习惯打今天的卡，再点一次可以取消。'
 
   const isEmpty =
     (rowMode === 'task' && gridTasks.length === 0) ||
@@ -405,7 +404,7 @@ export default function Board({
                             title={title}
                             onClick={() => onLogTime(task, ds, entries[0])}
                           >
-                            <div style={{ ...styles.dotCell, background: cat?.color ?? '#999', opacity: opacity || 0, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
+                            <div style={{ ...styles.dotCell, background: opacity ? cat?.color ?? '#999' : 'transparent', opacity: opacity || 1, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
                           </div>
                         )
                       })}
@@ -427,7 +426,7 @@ export default function Board({
                           style={{ ...styles.cell, ...(ds === todayStr ? styles.todayCol : {}) }}
                           title={title}
                         >
-                          <div style={{ ...styles.dotCell, background: cat.color, opacity: opacity || 0, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
+                          <div style={{ ...styles.dotCell, background: opacity ? cat.color : 'transparent', opacity: opacity || 1, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
                         </div>
                       )
                     })}
@@ -445,14 +444,15 @@ export default function Board({
                         return (
                           <div
                             key={habit.id + ds}
-                            style={{ ...styles.cell, ...(ds === todayStr ? styles.todayCol : {}) }}
+                            style={{ ...styles.cell, ...styles.blockCell, ...(ds === todayStr ? styles.todayCol : {}) }}
+                            title={done ? '已打卡，点击取消' : '点击打卡'}
+                            onClick={() => onToggleHabitLog(habit.id, ds)}
                           >
-                            <HabitDragToggle
-                              done={done}
-                              color={cat?.color ?? 'var(--primary)'}
-                              onToggle={() => onToggleHabitLog(habit.id, ds)}
-                              title={done ? '已打卡，拖动或点击取消' : '拖动或点击打卡'}
-                            />
+                            <div style={{
+                              ...styles.dotCell,
+                              background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
+                              border: done ? 'none' : '1.5px solid var(--border-soft)',
+                            }} />
                           </div>
                         )
                       })}
