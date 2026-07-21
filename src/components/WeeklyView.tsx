@@ -5,6 +5,7 @@ import { getWeekDays, formatDate, formatDayLabel, timeToMinutes } from '../utils
 import {
   generateDailyReview,
   generateWeeklyReview,
+  type AIConfig,
   type AIReviewResult,
   type DailyReviewData,
   type ReviewTask,
@@ -21,6 +22,7 @@ interface Props {
   projects: Project[]
   projectTasks: ProjectTask[]
   deadlines: Deadline[]
+  aiConfig: AIConfig
   onCreateSelection: (selection: {
     date: string
     type: 'plan' | 'actual'
@@ -287,6 +289,7 @@ export default function WeeklyView({
   projects,
   projectTasks,
   deadlines,
+  aiConfig,
   onCreateSelection,
   onClickTask,
   onLogActualFromPlan,
@@ -479,10 +482,10 @@ export default function WeeklyView({
     setAiLoading('daily')
     setAiError('')
     try {
-      const result = await generateDailyReview(buildDailyData())
+      const result = await generateDailyReview(buildDailyData(), aiConfig)
       saveDailyReview(selectedDate, result)
-    } catch {
-      setAiError('生成每日回顾失败。')
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : '生成每日回顾失败。')
     } finally {
       setAiLoading(null)
     }
@@ -492,10 +495,10 @@ export default function WeeklyView({
     setAiLoading('weekly')
     setAiError('')
     try {
-      const result = await generateWeeklyReview(buildWeeklyData())
+      const result = await generateWeeklyReview(buildWeeklyData(), aiConfig)
       saveWeeklyReview(weekKey, weekEnd, result)
-    } catch {
-      setAiError('生成每周回顾失败。')
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : '生成每周回顾失败。')
     } finally {
       setAiLoading(null)
     }

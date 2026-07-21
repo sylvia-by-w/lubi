@@ -34,13 +34,14 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig,
     addTask, updateTask, deleteTask,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote,
+    updateAIConfig,
     exportAllData, importAllData
   } = useStore()
 
@@ -134,6 +135,7 @@ export default function App() {
           projects={projects}
           projectTasks={projectTasks}
           deadlines={deadlines}
+          aiConfig={aiConfig}
           onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
           onLogActualFromPlan={handleLogActualFromPlan}
@@ -214,6 +216,8 @@ export default function App() {
         onDeleteProject={deleteProject}
         onExportAllData={exportAllData}
         onImportAllData={importAllData}
+        aiConfig={aiConfig}
+        onUpdateAIConfig={updateAIConfig}
       />
 
       <DeadlineModal

@@ -1,5 +1,11 @@
 import { useState } from 'react'
 import type { Category, Project } from '../types'
+import {
+  AI_PROVIDER_PRESETS,
+  testAIConnection,
+  type AIConfig,
+  type AIProvider,
+} from '../services/aiReviewService'
 
 interface Props {
   open: boolean
@@ -12,6 +18,8 @@ interface Props {
   onDeleteProject: (id: string) => void
   onExportAllData: () => string
   onImportAllData: (json: string) => void
+  aiConfig: AIConfig
+  onUpdateAIConfig: (updates: Partial<AIConfig>) => void
 }
 
 const PRESET_COLORS = [
@@ -25,13 +33,16 @@ export default function SettingsModal({
   onAddCategory, onDeleteCategory,
   onAddProject, onDeleteProject,
   onExportAllData, onImportAllData,
+  aiConfig, onUpdateAIConfig,
 }: Props) {
   const [catName, setCatName] = useState('')
   const [catColor, setCatColor] = useState(PRESET_COLORS[0])
   const [projName, setProjName] = useState('')
   const [projCategoryId, setProjCategoryId] = useState(categories[0]?.id ?? '')
-  const [tab, setTab] = useState<'categories' | 'projects' | 'backup'>('categories')
+  const [tab, setTab] = useState<'categories' | 'projects' | 'ai' | 'backup'>('categories')
   const [importMessage, setImportMessage] = useState('')
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
+  const [testMessage, setTestMessage] = useState('')
 
   const handleExport = () => {
     const json = onExportAllData()
@@ -88,6 +99,23 @@ export default function SettingsModal({
     setProjName('')
   }
 
+  const handleProviderChange = (provider: AIProvider) => {
+    if (provider === 'custom') {
+      onUpdateAIConfig({ provider })
+      return
+    }
+    const preset = AI_PROVIDER_PRESETS[provider]
+    onUpdateAIConfig({ provider, baseUrl: preset.baseUrl, model: preset.model })
+  }
+
+  const handleTestConnection = async () => {
+    setTestStatus('testing')
+    setTestMessage('')
+    const result = await testAIConnection(aiConfig)
+    setTestStatus(result.ok ? 'ok' : 'error')
+    setTestMessage(result.message)
+  }
+
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
@@ -105,6 +133,10 @@ export default function SettingsModal({
             style={{ ...styles.tab, ...(tab === 'projects' ? styles.tabActive : {}) }}
             onClick={() => setTab('projects')}
           >项目</button>
+          <button
+            style={{ ...styles.tab, ...(tab === 'ai' ? styles.tabActive : {}) }}
+            onClick={() => setTab('ai')}
+          >AI 回顾</button>
           <button
             style={{ ...styles.tab, ...(tab === 'backup' ? styles.tabActive : {}) }}
             onClick={() => setTab('backup')}
@@ -203,6 +235,95 @@ export default function SettingsModal({
           </div>
         )}
 
+        {tab === 'ai' && (
+          <div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
+              填写 API Key 后，"AI 回顾"会真正调用大模型生成内容；不填的话会继续用内置的模板生成回顾。
+              Key 只保存在这个浏览器本地，不会上传到任何服务器。
+            </p>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              {(Object.keys(AI_PROVIDER_PRESETS) as Array<Exclude<AIProvider, 'custom'>>).map(key => (
+                <button
+                  key={key}
+                  onClick={() => handleProviderChange(key)}
+                  style={{
+                    ...styles.providerChip,
+                    ...(aiConfig.provider === key ? styles.providerChipActive : {}),
+                  }}
+                >{AI_PROVIDER_PRESETS[key].label}</button>
+              ))}
+              <button
+                onClick={() => handleProviderChange('custom')}
+                style={{
+                  ...styles.providerChip,
+                  ...(aiConfig.provider === 'custom' ? styles.providerChipActive : {}),
+                }}
+              >自定义</button>
+            </div>
+
+            {aiConfig.provider !== 'custom' && (
+              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: -8, marginBottom: 14 }}>
+                {AI_PROVIDER_PRESETS[aiConfig.provider].note}
+                {' '}
+                <a
+                  href={AI_PROVIDER_PRESETS[aiConfig.provider].keyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--primary)' }}
+                >去获取 API Key →</a>
+              </p>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+              <label style={styles.fieldLabel}>
+                Base URL
+                <input
+                  style={{ ...styles.input, width: '100%', marginTop: 4, boxSizing: 'border-box' }}
+                  value={aiConfig.baseUrl}
+                  onChange={e => onUpdateAIConfig({ baseUrl: e.target.value })}
+                  placeholder="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+                />
+              </label>
+              <label style={styles.fieldLabel}>
+                模型名称
+                <input
+                  style={{ ...styles.input, width: '100%', marginTop: 4, boxSizing: 'border-box' }}
+                  value={aiConfig.model}
+                  onChange={e => onUpdateAIConfig({ model: e.target.value })}
+                  placeholder="glm-4.7-flash"
+                />
+              </label>
+              <label style={styles.fieldLabel}>
+                API Key
+                <input
+                  type="password"
+                  style={{ ...styles.input, width: '100%', marginTop: 4, boxSizing: 'border-box' }}
+                  value={aiConfig.apiKey}
+                  onChange={e => onUpdateAIConfig({ apiKey: e.target.value })}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+
+            <button
+              onClick={handleTestConnection}
+              disabled={testStatus === 'testing'}
+              style={{ ...styles.addBtn, marginBottom: 10 }}
+            >
+              {testStatus === 'testing' ? '测试中...' : '测试连接'}
+            </button>
+
+            {testStatus === 'ok' && (
+              <p style={{ color: '#10b981', fontSize: 13 }}>连接成功：{testMessage}</p>
+            )}
+            {testStatus === 'error' && (
+              <p style={{ color: '#ef4444', fontSize: 13 }}>{testMessage}</p>
+            )}
+          </div>
+        )}
+
         {tab === 'backup' && (
           <div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
@@ -274,5 +395,17 @@ const styles: Record<string, React.CSSProperties> = {
   closeBtn: {
     border: 'none', background: 'transparent', cursor: 'pointer',
     fontSize: 16, color: 'var(--text-secondary)',
+  },
+  providerChip: {
+    padding: '6px 12px', borderRadius: 999, border: '1px solid var(--border)',
+    background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 13,
+    fontWeight: 700, cursor: 'pointer',
+  },
+  providerChipActive: {
+    background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)',
+  },
+  fieldLabel: {
+    display: 'flex', flexDirection: 'column', fontSize: 12, fontWeight: 700,
+    color: 'var(--text-secondary)',
   },
 }

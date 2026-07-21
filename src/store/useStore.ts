@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
+import { DEFAULT_AI_CONFIG, type AIConfig } from '../services/aiReviewService'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -10,6 +11,7 @@ const KEYS = {
   habits: 'lyubishchev_habits',
   habitLogs: 'lyubishchev_habit_logs',
   monthlyNotes: 'lyubishchev_monthly_notes',
+  aiConfig: 'lyubishchev_ai_config',
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -66,6 +68,9 @@ export function useStore() {
   const [monthlyNotes, setMonthlyNotes] = useState<MonthlyNote[]>(() =>
     load(KEYS.monthlyNotes, [])
   )
+  const [aiConfig, setAiConfig] = useState<AIConfig>(() =>
+    load(KEYS.aiConfig, DEFAULT_AI_CONFIG)
+  )
 
   useEffect(() => save(KEYS.categories, categories), [categories])
   useEffect(() => save(KEYS.projects, projects), [projects])
@@ -75,6 +80,7 @@ export function useStore() {
   useEffect(() => save(KEYS.habits, habits), [habits])
   useEffect(() => save(KEYS.habitLogs, habitLogs), [habitLogs])
   useEffect(() => save(KEYS.monthlyNotes, monthlyNotes), [monthlyNotes])
+  useEffect(() => save(KEYS.aiConfig, aiConfig), [aiConfig])
 
   const addCategory = (cat: Omit<Category, 'id'>) => {
     const newCat = { ...cat, id: crypto.randomUUID() }
@@ -189,6 +195,10 @@ export function useStore() {
     })
   }
 
+  const updateAIConfig = (updates: Partial<AIConfig>) => {
+    setAiConfig(prev => ({ ...prev, ...updates }))
+  }
+
   const upsertMonthlyNote = (month: string, updates: Partial<Omit<MonthlyNote, 'id' | 'month'>>) => {
     setMonthlyNotes(prev => {
       const existing = prev.find(n => n.month === month)
@@ -214,7 +224,7 @@ export function useStore() {
   }
 
   return {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
@@ -222,6 +232,7 @@ export function useStore() {
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog,
     upsertMonthlyNote,
+    updateAIConfig,
     exportAllData, importAllData,
   }
 }
