@@ -32,6 +32,7 @@ export interface ProjectTask {
   estimatedMinutes?: number
   estimatedHours?: number
   priority?: PriorityLevel
+  order?: number
   createdAt: string
   completedAt?: string
 }

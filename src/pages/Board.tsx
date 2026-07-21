@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
+import { formatDate } from '../utils/time'
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -23,9 +24,6 @@ const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
 const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
 const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日']
 
-function fmtDate(d: Date) {
-  return d.toISOString().slice(0, 10)
-}
 function addDays(d: Date, n: number) {
   const x = new Date(d)
   x.setDate(x.getDate() + n)
@@ -106,9 +104,11 @@ export default function Board({
   const [showArchivedHabits, setShowArchivedHabits] = useState(false)
   const [quickAddDs, setQuickAddDs] = useState<string | null>(null)
   const [quickAddText, setQuickAddText] = useState('')
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-  const todayStr = fmtDate(startOfToday())
+  const todayStr = formatDate(startOfToday())
 
   const visibleTasks = [...projectTasks]
     .filter(t => !hideDone || t.status !== 'done')
@@ -122,7 +122,7 @@ export default function Board({
   const habitMonthStats = (habitId: string) => {
     let done = 0
     for (let day = 1; day <= elapsedDays; day++) {
-      const ds = fmtDate(new Date(monthStart.getFullYear(), monthStart.getMonth(), day))
+      const ds = formatDate(new Date(monthStart.getFullYear(), monthStart.getMonth(), day))
       if (habitLogs.some(l => l.habitId === habitId && l.date === ds)) done++
     }
     return { done, total: elapsedDays, pct: elapsedDays ? done / elapsedDays : 0 }
@@ -162,17 +162,24 @@ export default function Board({
     })
   }
 
+  const editingTask = editingTaskId ? projectTasks.find(t => t.id === editingTaskId) : undefined
+
   const doneCount = projectTasks.filter(t => t.status === 'done').length
   const inProgressCount = projectTasks.filter(t => t.status === 'in_progress').length
   const todoCount = projectTasks.filter(t => t.status === 'todo').length
 
+  const priorityWeight: Record<string, number> = { high: 0, medium: 1, low: 2 }
   const tasksForDay = (ds: string) =>
     [...projectTasks]
       .filter(t => t.dueDate === ds)
       .sort((a, b) => {
         if ((a.status === 'done') !== (b.status === 'done')) return a.status === 'done' ? 1 : -1
-        const order: Record<string, number> = { high: 0, medium: 1, low: 2 }
-        return (order[a.priority ?? ''] ?? 3) - (order[b.priority ?? ''] ?? 3)
+        if (a.order != null && b.order != null) return a.order - b.order
+        if (a.order != null) return -1
+        if (b.order != null) return 1
+        const pw = (priorityWeight[a.priority ?? ''] ?? 3) - (priorityWeight[b.priority ?? ''] ?? 3)
+        if (pw !== 0) return pw
+        return a.createdAt.localeCompare(b.createdAt)
       })
 
   const toggleDayTaskDone = (task: ProjectTask) => {
@@ -183,7 +190,7 @@ export default function Board({
     })
   }
 
-  const dayTasksMap = weekDays.map(d => { const ds = fmtDate(d); return { ds, list: tasksForDay(ds) } })
+  const dayTasksMap = weekDays.map(d => { const ds = formatDate(d); return { ds, list: tasksForDay(ds) } })
   const maxSlots = Math.max(4, ...dayTasksMap.map(d => d.list.length + 1))
 
   const submitQuickAdd = (ds: string) => {
@@ -193,6 +200,23 @@ export default function Board({
     setQuickAddText('')
   }
   const cancelQuickAdd = () => { setQuickAddDs(null); setQuickAddText('') }
+
+  const handleDropOnDay = (ds: string, targetTask: ProjectTask | undefined) => {
+    if (!dragTaskId) return
+    const list = tasksForDay(ds)
+    const dragIdx = list.findIndex(t => t.id === dragTaskId)
+    if (dragIdx === -1) { setDragTaskId(null); return }
+    const targetIdx = targetTask ? list.findIndex(t => t.id === targetTask.id) : list.length
+    if (dragIdx === targetIdx || dragIdx === targetIdx - 1) { setDragTaskId(null); return }
+    const insertAt = dragIdx < targetIdx ? targetIdx - 1 : targetIdx
+    const reordered = [...list]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(insertAt, 0, moved)
+    reordered.forEach((t, i) => {
+      if (t.order !== i) onUpdateProjectTask(t.id, { order: i })
+    })
+    setDragTaskId(null)
+  }
 
   return (
     <div style={styles.page}>
@@ -254,8 +278,8 @@ export default function Board({
                 return (
                   <div key={task.id} style={styles.taskRow}>
                     <span style={{ ...styles.dot, background: cat?.color ?? '#999' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }}>{task.title}</div>
+                    <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTaskId(task.id)}>
+                      <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }} title="点击编辑">{task.title}</div>
                       <div style={styles.taskMeta}>
                         {cat?.name ?? '无分类'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · 截止 ${task.dueDate}` : ''}
                       </div>
@@ -355,7 +379,7 @@ export default function Board({
               <thead>
                 <tr>
                   {weekDays.map((d, i) => {
-                    const ds = fmtDate(d)
+                    const ds = formatDate(d)
                     const isToday = ds === todayStr
                     return (
                       <th key={ds} style={{ ...styles.dayTh, ...(isToday ? styles.dayThToday : {}) }}>
@@ -375,13 +399,30 @@ export default function Board({
                       const project = task?.projectId ? projects.find(p => p.id === task.projectId) : undefined
                       const done = task?.status === 'done'
                       return (
-                        <td key={ds} style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}>
+                        <td
+                          key={ds}
+                          style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}
+                          onDragOver={e => dragTaskId && e.preventDefault()}
+                          onDrop={() => handleDropOnDay(ds, task)}
+                        >
                           {task && (
-                            <label style={styles.dayTaskRow}>
+                            <div
+                              style={{ ...styles.dayTaskRow, opacity: dragTaskId === task.id ? 0.4 : 1 }}
+                              draggable
+                              onDragStart={() => setDragTaskId(task.id)}
+                              onDragEnd={() => setDragTaskId(null)}
+                            >
+                              <span style={styles.dragHandle} title="拖动排序">::</span>
                               <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
-                              <span style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }} title={task.title}>{task.title}</span>
+                              <span
+                                style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
+                                title={`${task.title}（点击编辑）`}
+                                onClick={() => setEditingTaskId(task.id)}
+                              >
+                                {task.title}
+                              </span>
                               {project && <span style={styles.projectTag}>{project.name}</span>}
-                            </label>
+                            </div>
                           )}
                           {!task && isAddSlot && (
                             quickAddDs === ds ? (
@@ -465,6 +506,62 @@ export default function Board({
           </section>
         </div>
       </div>
+
+      {editingTask && (
+        <div style={styles.modalBackdrop} onClick={() => setEditingTaskId(null)}>
+          <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.panelTitle}>编辑任务</h3>
+              <button style={styles.deleteBtn} onClick={() => setEditingTaskId(null)} aria-label="关闭">x</button>
+            </div>
+            <input
+              style={styles.input}
+              value={editingTask.title}
+              onChange={e => onUpdateProjectTask(editingTask.id, { title: e.target.value })}
+            />
+            <select
+              style={styles.input}
+              value={editingTask.categoryId ?? ''}
+              onChange={e => onUpdateProjectTask(editingTask.id, { categoryId: e.target.value || undefined })}
+            >
+              <option value="">无分类</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select
+              style={styles.input}
+              value={editingTask.projectId ?? ''}
+              onChange={e => onUpdateProjectTask(editingTask.id, { projectId: e.target.value || undefined })}
+            >
+              <option value="">不挂项目</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <div style={styles.row}>
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                type="date"
+                value={editingTask.dueDate ?? ''}
+                onChange={e => onUpdateProjectTask(editingTask.id, { dueDate: e.target.value || undefined })}
+              />
+              <select
+                style={{ ...styles.input, width: 110 }}
+                value={editingTask.priority ?? ''}
+                onChange={e => onUpdateProjectTask(editingTask.id, { priority: (e.target.value || undefined) as PriorityLevel | undefined })}
+              >
+                <option value="">无优先级</option>
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+              </select>
+            </div>
+            <button
+              style={styles.modalDeleteBtn}
+              onClick={() => { onDeleteProjectTask(editingTask.id); setEditingTaskId(null) }}
+            >
+              删除任务
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -613,7 +710,8 @@ const styles: Record<string, CSSProperties> = {
   habitBarFill: { height: '100%', borderRadius: 3 },
   archiveBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '3px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   archivedToggle: { border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 },
-  dayTaskRow: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' },
+  dayTaskRow: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'grab' },
+  dragHandle: { color: 'var(--text-muted)', fontSize: 10, cursor: 'grab', flexShrink: 0, letterSpacing: -1 },
   dayTaskTitle: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' },
   projectTag: { fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'var(--surface-muted)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 },
   dayTable: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 },
@@ -624,4 +722,8 @@ const styles: Record<string, CSSProperties> = {
   dayQuickInput: { width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', font: 'inherit', fontSize: 11, boxSizing: 'border-box' },
   dayAddSlot: { border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', padding: 0 },
   dayTf: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontSize: 10, textAlign: 'center', color: 'var(--text-secondary)' },
+  modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
+  modalBox: { background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: 16, width: 320, boxShadow: 'var(--shadow-popover)', maxHeight: '80vh', overflow: 'auto', boxSizing: 'border-box' },
+  modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  modalDeleteBtn: { border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--danger)', padding: '8px 10px', width: '100%', cursor: 'pointer', fontWeight: 700, fontSize: 12, marginTop: 4 },
 }
