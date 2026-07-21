@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
-import { formatDate } from '../utils/time'
+import { formatDate, timeToMinutes, minutesToTime } from '../utils/time'
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -12,6 +12,9 @@ interface Props {
   onUpdateProjectTask: (id: string, updates: Partial<Omit<ProjectTask, 'id' | 'createdAt'>>) => void
   onDeleteProjectTask: (id: string) => void
   onLogTime: (task: ProjectTask, date: string, existingBlock?: TaskBlock) => void
+  onAddTask: (task: Omit<TaskBlock, 'id'>) => void
+  onUpdateTask: (id: string, updates: Partial<TaskBlock>) => void
+  onDeleteTask: (id: string) => void
   onAddHabit: (habit: Omit<HabitItem, 'id' | 'createdAt'>) => void
   onDeleteHabit: (id: string) => void
   onArchiveHabit: (id: string) => void
@@ -87,13 +90,16 @@ interface NewTaskForm {
   projectId: string
   dueDate: string
   priority: PriorityLevel | ''
+  startTime: string
+  endTime: string
 }
 
-const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDate: '', priority: 'medium' }
+const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDate: '', priority: 'medium', startTime: '', endTime: '' }
 
 export default function Board({
-  projectTasks, categories, projects, habits, habitLogs,
+  projectTasks, categories, projects, habits, habitLogs, tasks,
   onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask,
+  onAddTask, onUpdateTask, onDeleteTask,
   onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit,
 }: Props) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfToday()))
@@ -137,7 +143,7 @@ export default function Board({
 
   const handleAddTask = () => {
     if (!form.title.trim() || !form.categoryId) return
-    onAddProjectTask({
+    const newId = onAddProjectTask({
       title: form.title.trim(),
       status: 'todo',
       categoryId: form.categoryId,
@@ -145,6 +151,19 @@ export default function Board({
       dueDate: form.dueDate || undefined,
       priority: form.priority || undefined,
     })
+    if (form.dueDate && form.startTime) {
+      const endTime = form.endTime || minutesToTime(timeToMinutes(form.startTime) + 60)
+      onAddTask({
+        name: form.title.trim(),
+        categoryId: form.categoryId,
+        projectId: form.projectId || undefined,
+        projectTaskId: newId,
+        date: form.dueDate,
+        startTime: form.startTime,
+        endTime,
+        type: 'plan',
+      })
+    }
     setForm({ ...emptyForm, categoryId: form.categoryId })
   }
 
@@ -163,6 +182,46 @@ export default function Board({
   }
 
   const editingTask = editingTaskId ? projectTasks.find(t => t.id === editingTaskId) : undefined
+  const linkedPlanBlock = (taskId: string) => tasks.find(t => t.projectTaskId === taskId && t.type === 'plan')
+  const editingPlanBlock = editingTask ? linkedPlanBlock(editingTask.id) : undefined
+
+  const updateEditingTask = (updates: Partial<Omit<ProjectTask, 'id' | 'createdAt'>>) => {
+    if (!editingTask) return
+    onUpdateProjectTask(editingTask.id, updates)
+    const block = linkedPlanBlock(editingTask.id)
+    if (block) {
+      const blockUpdates: Partial<TaskBlock> = {}
+      if (updates.title !== undefined) blockUpdates.name = updates.title
+      if (updates.categoryId !== undefined) blockUpdates.categoryId = updates.categoryId || categories[0]?.id || ''
+      if (updates.projectId !== undefined) blockUpdates.projectId = updates.projectId
+      if (updates.dueDate) blockUpdates.date = updates.dueDate
+      if (Object.keys(blockUpdates).length) onUpdateTask(block.id, blockUpdates)
+    }
+  }
+
+  const setEditingPlanTime = (field: 'start' | 'end', value: string) => {
+    if (!editingTask) return
+    const existing = linkedPlanBlock(editingTask.id)
+    if (field === 'start' && !value) {
+      if (existing) onDeleteTask(existing.id)
+      return
+    }
+    const nextStart = field === 'start' ? value : (existing?.startTime ?? '09:00')
+    const nextEnd = field === 'end' && value ? value : (existing?.endTime ?? minutesToTime(timeToMinutes(nextStart) + 60))
+    const resolvedCategoryId = editingTask.categoryId || taskCategory(editingTask, categories, projects)?.id || categories[0]?.id || ''
+    const payload = {
+      name: editingTask.title,
+      categoryId: resolvedCategoryId,
+      projectId: editingTask.projectId,
+      projectTaskId: editingTask.id,
+      date: editingTask.dueDate || todayStr,
+      startTime: nextStart,
+      endTime: nextEnd,
+      type: 'plan' as const,
+    }
+    if (existing) onUpdateTask(existing.id, payload)
+    else onAddTask(payload)
+  }
 
   const doneCount = projectTasks.filter(t => t.status === 'done').length
   const inProgressCount = projectTasks.filter(t => t.status === 'in_progress').length
@@ -259,6 +318,23 @@ export default function Board({
                 <option value="medium">中</option>
                 <option value="high">高</option>
               </select>
+            </div>
+            <label style={styles.smallLabel}>计划时间(可选，会同步到周视图)</label>
+            <div style={styles.row}>
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                type="time"
+                value={form.startTime}
+                onChange={e => setForm(prev => ({ ...prev, startTime: e.target.value }))}
+                disabled={!form.dueDate}
+              />
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                type="time"
+                value={form.endTime}
+                onChange={e => setForm(prev => ({ ...prev, endTime: e.target.value }))}
+                disabled={!form.startTime}
+              />
             </div>
             <button style={styles.addBtn} onClick={handleAddTask}>+ 添加任务</button>
           </section>
@@ -511,41 +587,49 @@ export default function Board({
         <div style={styles.modalBackdrop} onClick={() => setEditingTaskId(null)}>
           <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={styles.panelTitle}>编辑任务</h3>
+              <h3 style={styles.modalTitle}>编辑任务</h3>
               <button style={styles.deleteBtn} onClick={() => setEditingTaskId(null)} aria-label="关闭">x</button>
             </div>
+
+            <label style={styles.smallLabel}>任务名称</label>
             <input
               style={styles.input}
               value={editingTask.title}
-              onChange={e => onUpdateProjectTask(editingTask.id, { title: e.target.value })}
+              onChange={e => updateEditingTask({ title: e.target.value })}
             />
+
+            <label style={styles.smallLabel}>分类</label>
             <select
               style={styles.input}
               value={editingTask.categoryId ?? ''}
-              onChange={e => onUpdateProjectTask(editingTask.id, { categoryId: e.target.value || undefined })}
+              onChange={e => updateEditingTask({ categoryId: e.target.value || undefined })}
             >
               <option value="">无分类</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+
+            <label style={styles.smallLabel}>项目(可选)</label>
             <select
               style={styles.input}
               value={editingTask.projectId ?? ''}
-              onChange={e => onUpdateProjectTask(editingTask.id, { projectId: e.target.value || undefined })}
+              onChange={e => updateEditingTask({ projectId: e.target.value || undefined })}
             >
               <option value="">不挂项目</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+
+            <label style={styles.smallLabel}>截止日期 / 优先级</label>
             <div style={styles.row}>
               <input
                 style={{ ...styles.input, flex: 1 }}
                 type="date"
                 value={editingTask.dueDate ?? ''}
-                onChange={e => onUpdateProjectTask(editingTask.id, { dueDate: e.target.value || undefined })}
+                onChange={e => updateEditingTask({ dueDate: e.target.value || undefined })}
               />
               <select
                 style={{ ...styles.input, width: 110 }}
                 value={editingTask.priority ?? ''}
-                onChange={e => onUpdateProjectTask(editingTask.id, { priority: (e.target.value || undefined) as PriorityLevel | undefined })}
+                onChange={e => updateEditingTask({ priority: (e.target.value || undefined) as PriorityLevel | undefined })}
               >
                 <option value="">无优先级</option>
                 <option value="low">低</option>
@@ -553,6 +637,25 @@ export default function Board({
                 <option value="high">高</option>
               </select>
             </div>
+
+            <label style={styles.smallLabel}>计划时间(可选，会同步到周视图)</label>
+            <div style={styles.row}>
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                type="time"
+                value={editingPlanBlock?.startTime ?? ''}
+                onChange={e => setEditingPlanTime('start', e.target.value)}
+                disabled={!editingTask.dueDate}
+              />
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                type="time"
+                value={editingPlanBlock?.endTime ?? ''}
+                onChange={e => setEditingPlanTime('end', e.target.value)}
+                disabled={!editingPlanBlock}
+              />
+            </div>
+
             <button
               style={styles.modalDeleteBtn}
               onClick={() => { onDeleteProjectTask(editingTask.id); setEditingTaskId(null) }}
@@ -725,5 +828,7 @@ const styles: Record<string, CSSProperties> = {
   modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   modalBox: { background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: 16, width: 320, boxShadow: 'var(--shadow-popover)', maxHeight: '80vh', overflow: 'auto', boxSizing: 'border-box' },
   modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  modalTitle: { margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' },
+  smallLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 3, display: 'block' },
   modalDeleteBtn: { border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--danger)', padding: '8px 10px', width: '100%', cursor: 'pointer', fontWeight: 700, fontSize: 12, marginTop: 4 },
 }
