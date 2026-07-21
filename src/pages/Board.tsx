@@ -1,6 +1,5 @@
-import { Fragment, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
-import { timeToMinutes } from '../utils/time'
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -20,12 +19,9 @@ interface Props {
   habitLogs: { id: string; habitId: string; date: string }[]
 }
 
-const RANGE_DAYS = 10
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
 const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
-type RowMode = 'task' | 'category' | 'habit'
-const ROW_MODE_LABEL: Record<RowMode, string> = { task: '任务', category: '分类', habit: '习惯' }
-const GRID_STALE_DAYS = 14
+const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日']
 
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -72,9 +68,13 @@ function daysElapsedInMonth(d: Date) {
   }
   return today.getDate()
 }
-function isStaleDone(task: ProjectTask) {
-  if (task.status !== 'done' || !task.completedAt) return false
-  return (startOfToday().getTime() - new Date(task.completedAt).getTime()) > GRID_STALE_DAYS * 86400000
+function startOfWeek(d: Date) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  const day = x.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  x.setDate(x.getDate() + diff)
+  return x
 }
 function cycleTimeDays(task: ProjectTask): number | null {
   if (task.status !== 'done' || !task.completedAt) return null
@@ -94,20 +94,18 @@ interface NewTaskForm {
 const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDate: '', priority: 'medium' }
 
 export default function Board({
-  projectTasks, categories, projects, tasks, habits, habitLogs,
-  onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask, onLogTime,
-  onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit, onToggleHabitLog,
+  projectTasks, categories, projects, habits, habitLogs,
+  onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask,
+  onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit,
 }: Props) {
-  const [rangeStart, setRangeStart] = useState(() => startOfToday())
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfToday()))
   const [form, setForm] = useState<NewTaskForm>({ ...emptyForm, categoryId: categories[0]?.id ?? '' })
   const [hideDone, setHideDone] = useState(false)
-  const [rowMode, setRowMode] = useState<RowMode>('task')
   const [habitName, setHabitName] = useState('')
   const [habitCategoryId, setHabitCategoryId] = useState('')
-  const [hideOldGridDone, setHideOldGridDone] = useState(true)
   const [showArchivedHabits, setShowArchivedHabits] = useState(false)
 
-  const days = Array.from({ length: RANGE_DAYS }, (_, i) => addDays(rangeStart, i))
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayStr = fmtDate(startOfToday())
 
   const visibleTasks = [...projectTasks]
@@ -116,7 +114,6 @@ export default function Board({
 
   const activeHabits = habits.filter(h => !h.archived)
   const archivedHabits = habits.filter(h => h.archived)
-  const actualEntries = tasks.filter(t => t.type === 'actual')
 
   const monthStart = startOfMonth(startOfToday())
   const elapsedDays = daysElapsedInMonth(monthStart)
@@ -167,29 +164,22 @@ export default function Board({
   const inProgressCount = projectTasks.filter(t => t.status === 'in_progress').length
   const todoCount = projectTasks.filter(t => t.status === 'todo').length
 
-  // minutes logged for a given category on a given day, across all tasks resolving to it
-  const categoryMinutes = (categoryId: string, ds: string) => {
-    const idsInCategory = new Set(
-      projectTasks.filter(t => taskCategory(t, categories, projects)?.id === categoryId).map(t => t.id)
-    )
-    return actualEntries
-      .filter(e => e.date === ds && e.projectTaskId && idsInCategory.has(e.projectTaskId))
-      .reduce((sum, e) => sum + Math.max(0, timeToMinutes(e.endTime) - timeToMinutes(e.startTime)), 0)
+  const tasksForDay = (ds: string) =>
+    [...projectTasks]
+      .filter(t => t.dueDate === ds)
+      .sort((a, b) => {
+        if ((a.status === 'done') !== (b.status === 'done')) return a.status === 'done' ? 1 : -1
+        const order: Record<string, number> = { high: 0, medium: 1, low: 2 }
+        return (order[a.priority ?? ''] ?? 3) - (order[b.priority ?? ''] ?? 3)
+      })
+
+  const toggleDayTaskDone = (task: ProjectTask) => {
+    const done = task.status === 'done'
+    onUpdateProjectTask(task.id, {
+      status: done ? 'todo' : 'done',
+      completedAt: done ? undefined : new Date().toISOString(),
+    })
   }
-
-  const gridTasks = rowMode === 'task' && hideOldGridDone
-    ? visibleTasks.filter(t => !isStaleDone(t))
-    : visibleTasks
-
-  const gridHint =
-    rowMode === 'task' ? '点击圆点记录当天实际花的时间(和周视图里同一个时间块编辑器)。'
-    : rowMode === 'category' ? '每个分类当天的总投入时间，深浅代表投入多少，来自任务维度下记录的时间块。'
-    : '点击圆点为这个习惯打今天的卡，再点一次可以取消。'
-
-  const isEmpty =
-    (rowMode === 'task' && gridTasks.length === 0) ||
-    (rowMode === 'category' && categories.length === 0) ||
-    (rowMode === 'habit' && activeHabits.length === 0)
 
   return (
     <div style={styles.page}>
@@ -339,127 +329,50 @@ export default function Board({
         <div style={styles.midCol}>
           <section style={styles.panel}>
             <div style={styles.sectionHeader}>
-              <h3 style={styles.panelTitle}>进度网格</h3>
+              <h3 style={styles.panelTitle}>日计划</h3>
               <div style={styles.row}>
-                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, -RANGE_DAYS))}>&#8249; 上一页</button>
-                <button style={styles.navBtn} onClick={() => setRangeStart(startOfToday())}>今天</button>
-                <button style={styles.navBtn} onClick={() => setRangeStart(addDays(rangeStart, RANGE_DAYS))}>下一页 &#8250;</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, -7))}>&#8249; 上一周</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(startOfWeek(startOfToday()))}>本周</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, 7))}>下一周 &#8250;</button>
               </div>
             </div>
+            <p style={styles.hint}>按截止日期落在每一天的任务，勾选即完成。没有截止日期的任务留在左侧任务清单里。</p>
 
-            <div style={styles.modeSwitch}>
-              {(['task', 'category', 'habit'] as RowMode[]).map(mode => (
-                <button
-                  key={mode}
-                  style={{ ...styles.modeBtn, ...(rowMode === mode ? styles.modeBtnActive : {}) }}
-                  onClick={() => setRowMode(mode)}
-                >
-                  {ROW_MODE_LABEL[mode]}
-                </button>
-              ))}
-            </div>
-
-            {rowMode === 'task' && (
-              <label style={{ ...styles.hideDoneLabel, marginBottom: 8 }}>
-                <input type="checkbox" checked={hideOldGridDone} onChange={e => setHideOldGridDone(e.target.checked)} />
-                隐藏{GRID_STALE_DAYS}天前已完成的任务
-              </label>
-            )}
-            <p style={styles.hint}>{gridHint}</p>
-            {isEmpty && (
-              <p style={styles.emptyText}>
-                {rowMode === 'habit' ? '左侧先添加一个习惯，这里会显示每天的打卡情况。' : '添加任务后，这里会显示每天的进度。'}
-              </p>
-            )}
-
-            <div style={styles.gridWrap}>
-              <div style={{ ...styles.grid, gridTemplateColumns: `160px repeat(${RANGE_DAYS}, minmax(40px, 1fr))` }}>
-                <div style={{ ...styles.cell, ...styles.headCell, ...styles.corner }}>{ROW_MODE_LABEL[rowMode]}</div>
-                {days.map(d => {
-                  const ds = fmtDate(d)
-                  return (
-                    <div key={ds} style={{ ...styles.cell, ...styles.headCell, ...(ds === todayStr ? styles.todayCol : {}) }}>
-                      {d.getMonth() + 1}/{d.getDate()}
+            <div style={styles.dayGrid}>
+              {weekDays.map((d, i) => {
+                const ds = fmtDate(d)
+                const isToday = ds === todayStr
+                const dayTasks = tasksForDay(ds)
+                const doneCount = dayTasks.filter(t => t.status === 'done').length
+                const total = dayTasks.length
+                const pct = total ? doneCount / total : 0
+                return (
+                  <div key={ds} style={{ ...styles.dayCard, ...(isToday ? styles.dayCardToday : {}) }}>
+                    <div style={styles.dayCardHeader}>
+                      <div>
+                        <p style={styles.dayCardWeekday}>周{WEEKDAY_LABEL[i]}{isToday ? ' · 今天' : ''}</p>
+                        <p style={styles.dayCardDate}>{d.getMonth() + 1}/{d.getDate()}</p>
+                      </div>
+                      <DayDonut pct={pct} />
                     </div>
-                  )
-                })}
-
-                {rowMode === 'task' && gridTasks.map(task => {
-                  const cat = taskCategory(task, categories, projects)
-                  return (
-                    <Fragment key={task.id}>
-                      <div style={{ ...styles.cell, ...styles.rowLabel }} title={task.title}>{task.title}</div>
-                      {days.map(d => {
-                        const ds = fmtDate(d)
-                        const entries = actualEntries.filter(t => t.projectTaskId === task.id && t.date === ds)
-                        const minutes = entries.reduce((sum, e) => sum + Math.max(0, timeToMinutes(e.endTime) - timeToMinutes(e.startTime)), 0)
-                        const opacity = minutes === 0 ? 0 : Math.min(1, 0.35 + minutes / 150)
-                        const title = entries.length === 0
-                          ? '还没有记录时间 - 点击添加'
-                          : `${entries.map(e => `${e.startTime}-${e.endTime}`).join(', ')}(共${(minutes / 60).toFixed(1)}小时)`
+                    <div style={styles.dayCardList}>
+                      {dayTasks.map(task => {
+                        const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
+                        const done = task.status === 'done'
                         return (
-                          <div
-                            key={task.id + ds}
-                            style={{ ...styles.cell, ...styles.blockCell, ...(ds === todayStr ? styles.todayCol : {}) }}
-                            title={title}
-                            onClick={() => onLogTime(task, ds, entries[0])}
-                          >
-                            <div style={{ ...styles.dotCell, background: opacity ? cat?.color ?? '#999' : 'transparent', opacity: opacity || 1, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
-                          </div>
+                          <label key={task.id} style={styles.dayTaskRow}>
+                            <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
+                            <span style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }} title={task.title}>{task.title}</span>
+                            {project && <span style={styles.projectTag}>{project.name}</span>}
+                          </label>
                         )
                       })}
-                    </Fragment>
-                  )
-                })}
-
-                {rowMode === 'category' && categories.map(cat => (
-                  <Fragment key={cat.id}>
-                    <div style={{ ...styles.cell, ...styles.rowLabel }} title={cat.name}>{cat.name}</div>
-                    {days.map(d => {
-                      const ds = fmtDate(d)
-                      const minutes = categoryMinutes(cat.id, ds)
-                      const opacity = minutes === 0 ? 0 : Math.min(1, 0.35 + minutes / 240)
-                      const title = minutes === 0 ? '这天没有记录' : `共 ${(minutes / 60).toFixed(1)} 小时`
-                      return (
-                        <div
-                          key={cat.id + ds}
-                          style={{ ...styles.cell, ...(ds === todayStr ? styles.todayCol : {}) }}
-                          title={title}
-                        >
-                          <div style={{ ...styles.dotCell, background: opacity ? cat.color : 'transparent', opacity: opacity || 1, border: opacity ? 'none' : '1.5px solid var(--border-soft)' }} />
-                        </div>
-                      )
-                    })}
-                  </Fragment>
-                ))}
-
-                {rowMode === 'habit' && activeHabits.map(habit => {
-                  const cat = habit.categoryId ? categories.find(c => c.id === habit.categoryId) : undefined
-                  return (
-                    <Fragment key={habit.id}>
-                      <div style={{ ...styles.cell, ...styles.rowLabel }} title={habit.name}>{habit.name}</div>
-                      {days.map(d => {
-                        const ds = fmtDate(d)
-                        const done = habitLogs.some(l => l.habitId === habit.id && l.date === ds)
-                        return (
-                          <div
-                            key={habit.id + ds}
-                            style={{ ...styles.cell, ...styles.blockCell, ...(ds === todayStr ? styles.todayCol : {}) }}
-                            title={done ? '已打卡，点击取消' : '点击打卡'}
-                            onClick={() => onToggleHabitLog(habit.id, ds)}
-                          >
-                            <div style={{
-                              ...styles.dotCell,
-                              background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
-                              border: done ? 'none' : '1.5px solid var(--border-soft)',
-                            }} />
-                          </div>
-                        )
-                      })}
-                    </Fragment>
-                  )
-                })}
-              </div>
+                      {dayTasks.length === 0 && <p style={styles.emptyText}>这天没有安排任务。</p>}
+                    </div>
+                    <div style={styles.dayCardFooter}>完成率 {Math.round(pct * 100)}% · 已完成 {doneCount} · 未完成 {total - doneCount}</div>
+                  </div>
+                )
+              })}
             </div>
           </section>
         </div>
@@ -584,6 +497,25 @@ function MonthDonut({ pct }: { pct: number }) {
   )
 }
 
+function DayDonut({ pct }: { pct: number }) {
+  const r = 15
+  const c = 2 * Math.PI * r
+  const clamped = Math.max(0, Math.min(1, pct))
+  return (
+    <svg width="38" height="38" viewBox="0 0 38 38">
+      <circle cx="19" cy="19" r={r} fill="none" stroke="var(--border-soft)" strokeWidth={5} />
+      <circle
+        cx="19" cy="19" r={r} fill="none" stroke="var(--primary)" strokeWidth={5}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * clamped}
+        transform="rotate(-90 19 19)"
+      />
+      <text x="19" y="23" textAnchor="middle" fontSize="10" fontWeight={700} fill="var(--text-primary)">
+        {Math.round(clamped * 100)}%
+      </text>
+    </svg>
+  )
+}
+
 function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.summaryMetric}>
@@ -648,4 +580,15 @@ const styles: Record<string, CSSProperties> = {
   habitBarFill: { height: '100%', borderRadius: 3 },
   archiveBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '3px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   archivedToggle: { border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 },
+  dayGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 },
+  dayCard: { border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-soft)', padding: 10, display: 'flex', flexDirection: 'column', minHeight: 220 },
+  dayCardToday: { border: '1px solid var(--primary)', background: 'var(--primary-soft)' },
+  dayCardHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 4, marginBottom: 8 },
+  dayCardWeekday: { margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-primary)' },
+  dayCardDate: { margin: '2px 0 0', fontSize: 11, color: 'var(--text-muted)' },
+  dayCardList: { display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflow: 'auto' },
+  dayTaskRow: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' },
+  dayTaskTitle: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' },
+  projectTag: { fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'var(--surface-muted)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 },
+  dayCardFooter: { marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--border-soft)', fontSize: 10, color: 'var(--text-secondary)' },
 }

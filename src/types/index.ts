@@ -93,12 +93,20 @@ export interface HabitLog {
   date: string
 }
 
+export interface MonthlyPlanItem {
+  id: string
+  title: string
+  categoryId?: string
+  done: boolean
+}
+
 export interface MonthlyNote {
   id: string
   month: string
   quote?: string
   reminder?: string
   plan?: string
+  planItems?: MonthlyPlanItem[]
 }
 
 export interface AppState {

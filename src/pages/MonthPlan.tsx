@@ -1,5 +1,5 @@
-import { Fragment, useState, type CSSProperties } from 'react'
-import type { Category, HabitItem, HabitLog, MonthlyNote } from '../types'
+import { useState, type CSSProperties } from 'react'
+import type { Category, HabitItem, HabitLog, MonthlyNote, MonthlyPlanItem } from '../types'
 import { formatDate } from '../utils/time'
 
 interface Props {
@@ -68,6 +68,8 @@ export default function MonthPlan({
   onToggleHabitLog, onUpsertMonthlyNote,
 }: Props) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
+  const [newItemTitle, setNewItemTitle] = useState('')
+  const [newItemCategoryId, setNewItemCategoryId] = useState('')
   const monthStart = startOfMonth(cursor)
   const monthKey = monthKeyOf(monthStart)
   const monthLabel = monthLabelOf(monthStart)
@@ -77,6 +79,60 @@ export default function MonthPlan({
   const activeHabits = habits.filter(h => !h.archived)
   const weeks = buildWeeks(monthStart)
   const note = monthlyNotes.find(n => n.month === monthKey)
+
+  const groupedHabits = (() => {
+    const byCat = new Map<string, HabitItem[]>()
+    activeHabits.forEach(h => {
+      const key = h.categoryId ?? '__none__'
+      if (!byCat.has(key)) byCat.set(key, [])
+      byCat.get(key)!.push(h)
+    })
+    const groups: { label: string; habits: HabitItem[] }[] = []
+    categories.forEach(c => {
+      const list = byCat.get(c.id)
+      if (list && list.length) groups.push({ label: c.name, habits: list })
+    })
+    const none = byCat.get('__none__')
+    if (none && none.length) groups.push({ label: '未分类', habits: none })
+    return groups
+  })()
+
+  const planItems = note?.planItems ?? []
+  const groupedPlanItems = (() => {
+    const byCat = new Map<string, MonthlyPlanItem[]>()
+    planItems.forEach(item => {
+      const key = item.categoryId ?? '__none__'
+      if (!byCat.has(key)) byCat.set(key, [])
+      byCat.get(key)!.push(item)
+    })
+    const groups: { label: string; items: MonthlyPlanItem[] }[] = []
+    categories.forEach(c => {
+      const list = byCat.get(c.id)
+      if (list && list.length) groups.push({ label: c.name, items: list })
+    })
+    const none = byCat.get('__none__')
+    if (none && none.length) groups.push({ label: '未分类', items: none })
+    return groups
+  })()
+  const planDoneCount = planItems.filter(i => i.done).length
+
+  const handleAddPlanItem = () => {
+    if (!newItemTitle.trim()) return
+    const item: MonthlyPlanItem = {
+      id: crypto.randomUUID(),
+      title: newItemTitle.trim(),
+      categoryId: newItemCategoryId || undefined,
+      done: false,
+    }
+    onUpsertMonthlyNote(monthKey, { planItems: [...planItems, item] })
+    setNewItemTitle('')
+  }
+  const handleTogglePlanItem = (id: string) => {
+    onUpsertMonthlyNote(monthKey, { planItems: planItems.map(i => i.id === id ? { ...i, done: !i.done } : i) })
+  }
+  const handleDeletePlanItem = (id: string) => {
+    onUpsertMonthlyNote(monthKey, { planItems: planItems.filter(i => i.id !== id) })
+  }
 
   const isCountable = (c: DayCell) => c.inMonth && formatDate(c.date) <= todayStr
   const isDone = (habitId: string, ds: string) => habitLogs.some(l => l.habitId === habitId && l.date === ds)
@@ -162,13 +218,55 @@ export default function MonthPlan({
       </div>
 
       <section style={{ ...styles.panel, marginBottom: 18 }}>
-        <h3 style={styles.panelTitle}>本月计划</h3>
-        <textarea
-          style={styles.planTextarea}
-          placeholder="写下这个月想做的事、目标、重点关注的方向…"
-          value={note?.plan ?? ''}
-          onChange={e => onUpsertMonthlyNote(monthKey, { plan: e.target.value })}
-        />
+        <div style={styles.planHeader}>
+          <h3 style={styles.panelTitle}>本月计划</h3>
+          {planItems.length > 0 && (
+            <div style={styles.planProgress}>
+              <MonthDonut pct={planItems.length ? planDoneCount / planItems.length : 0} size={36} />
+              <span style={styles.planProgressLabel}>{planDoneCount}/{planItems.length} 已完成</span>
+            </div>
+          )}
+        </div>
+
+        <div style={styles.planAddRow}>
+          <input
+            style={{ ...styles.input, flex: 1, marginBottom: 0 }}
+            placeholder="添加一条计划事项…"
+            value={newItemTitle}
+            onChange={e => setNewItemTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddPlanItem()}
+          />
+          <select
+            style={{ ...styles.input, width: 100, marginBottom: 0 }}
+            value={newItemCategoryId}
+            onChange={e => setNewItemCategoryId(e.target.value)}
+          >
+            <option value="">分类</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button style={styles.planAddBtn} onClick={handleAddPlanItem}>添加</button>
+        </div>
+
+        {groupedPlanItems.length === 0 ? (
+          <p style={styles.emptyText}>还没有计划事项，添加一条吧。</p>
+        ) : (
+          groupedPlanItems.map(group => (
+            <div key={group.label} style={{ marginBottom: 10 }}>
+              <p style={styles.planGroupLabel}>{group.label}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {group.items.map(item => (
+                  <div key={item.id} style={styles.planItemRow}>
+                    <label style={styles.planItemLabel}>
+                      <input type="checkbox" checked={item.done} onChange={() => handleTogglePlanItem(item.id)} />
+                      <span style={{ ...styles.planItemTitle, ...(item.done ? styles.taskNameDone : {}) }}>{item.title}</span>
+                    </label>
+                    <button style={styles.deleteBtn} onClick={() => handleDeletePlanItem(item.id)} aria-label="删除">x</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </section>
 
       {activeHabits.length === 0 ? (
@@ -184,52 +282,83 @@ export default function MonthPlan({
                     <span style={styles.weekLabel}>第 {wi + 1} 周</span>
                     {pct !== null && <MonthDonut pct={pct} size={26} />}
                   </div>
-                  <div style={{ ...styles.weekTable, gridTemplateColumns: `70px repeat(7, 1fr)` }}>
-                    <div style={{ ...styles.weekCell, ...styles.weekHeadCell }} />
-                    {week.map((c, ci) => (
-                      <div
-                        key={ci}
-                        style={{
-                          ...styles.weekCell, ...styles.weekHeadCell,
-                          ...(formatDate(c.date) === todayStr ? styles.weekTodayCell : {}),
-                          ...(c.inMonth ? {} : styles.weekOutCell),
-                        }}
-                      >
-                        {WEEKDAY_LABELS[ci]}<br />{c.date.getDate()}
-                      </div>
-                    ))}
-                    {activeHabits.map(h => {
-                      const cat = h.categoryId ? categories.find(cc => cc.id === h.categoryId) : undefined
-                      return (
-                        <Fragment key={h.id}>
-                          <div style={{ ...styles.weekCell, ...styles.weekRowLabel }} title={h.name}>{h.name}</div>
+                  <table style={styles.habitTable}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...styles.habitTh, ...styles.habitThCat }}>类别</th>
+                        <th style={{ ...styles.habitTh, ...styles.habitThItem }}>事项</th>
+                        {week.map((c, ci) => (
+                          <th
+                            key={ci}
+                            style={{
+                              ...styles.habitTh,
+                              ...(formatDate(c.date) === todayStr ? styles.weekTodayCell : {}),
+                              ...(c.inMonth ? {} : styles.weekOutCell),
+                            }}
+                          >
+                            {WEEKDAY_LABELS[ci]}<br />{c.date.getDate()}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedHabits.map(group => group.habits.map((h, hi) => (
+                        <tr key={h.id}>
+                          {hi === 0 && (
+                            <td style={styles.habitTdCat} rowSpan={group.habits.length}>{group.label}</td>
+                          )}
+                          <td style={styles.habitTdItem} title={h.name}>{h.name}</td>
                           {week.map((c, ci) => {
                             const ds = formatDate(c.date)
                             const done = c.inMonth && isDone(h.id, ds)
                             return (
-                              <div
+                              <td
                                 key={ci}
                                 style={{
-                                  ...styles.weekCell,
+                                  ...styles.habitTdCheck,
                                   ...(formatDate(c.date) === todayStr ? styles.weekTodayCell : {}),
-                                  ...(c.inMonth ? { cursor: 'pointer' } : styles.weekOutCell),
+                                  ...(c.inMonth ? {} : styles.weekOutCell),
                                 }}
-                                onClick={() => c.inMonth && onToggleHabitLog(h.id, ds)}
                               >
                                 {c.inMonth && (
-                                  <span style={{
-                                    ...styles.weekDot,
-                                    background: done ? (cat?.color ?? 'var(--primary)') : 'transparent',
-                                    border: done ? 'none' : '1.5px solid var(--border-soft)',
-                                  }} />
+                                  <input type="checkbox" checked={done} onChange={() => onToggleHabitLog(h.id, ds)} />
                                 )}
-                              </div>
+                              </td>
                             )
                           })}
-                        </Fragment>
-                      )
-                    })}
-                  </div>
+                        </tr>
+                      )))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={2} style={styles.habitTfLabel}>每日完成率</td>
+                        {week.map((c, ci) => {
+                          const ds = formatDate(c.date)
+                          const countable = c.inMonth && ds <= todayStr
+                          const doneCount = countable ? activeHabits.filter(h => isDone(h.id, ds)).length : 0
+                          const pctDay = countable && activeHabits.length ? doneCount / activeHabits.length : null
+                          return (
+                            <td key={ci} style={{ ...styles.habitTfCell, ...(c.inMonth ? {} : styles.weekOutCell) }}>
+                              {pctDay !== null ? `${Math.round(pctDay * 100)}%` : '-'}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                      <tr>
+                        <td colSpan={2} style={styles.habitTfLabel}>已完成/未完成</td>
+                        {week.map((c, ci) => {
+                          const ds = formatDate(c.date)
+                          const countable = c.inMonth && ds <= todayStr
+                          const doneCount = countable ? activeHabits.filter(h => isDone(h.id, ds)).length : 0
+                          return (
+                            <td key={ci} style={{ ...styles.habitTfCell, ...(c.inMonth ? {} : styles.weekOutCell) }}>
+                              {countable ? `${doneCount}/${activeHabits.length - doneCount}` : '-'}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               )
             })}
@@ -328,4 +457,25 @@ const styles: Record<string, CSSProperties> = {
   panelTitle: { margin: '0 0 8px', fontSize: 14, color: 'var(--text-primary)', fontWeight: 800 },
   chartBox: { width: '100%', height: 160, display: 'block' },
   planTextarea: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', font: 'inherit', fontSize: 13, width: '100%', minHeight: 90, resize: 'vertical', color: 'var(--text-primary)', background: 'var(--surface)', boxSizing: 'border-box' },
+  habitTable: { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
+  habitTh: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontWeight: 700, fontSize: 9, textAlign: 'center', lineHeight: 1.3, color: 'var(--text-secondary)' },
+  habitThCat: { width: 44 },
+  habitThItem: { width: 76, textAlign: 'left', paddingLeft: 6 },
+  habitTdCat: { border: '1px solid var(--border-soft)', padding: '5px 4px', fontWeight: 700, fontSize: 10, color: 'var(--text-primary)', background: 'var(--surface-soft)', verticalAlign: 'top', textAlign: 'left' },
+  habitTdItem: { border: '1px solid var(--border-soft)', padding: '5px 6px', fontSize: 11, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 },
+  habitTdCheck: { border: '1px solid var(--border-soft)', padding: '4px', textAlign: 'center' },
+  habitTfLabel: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 6px', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'left' },
+  habitTfCell: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontSize: 10, textAlign: 'center', color: 'var(--text-secondary)' },
+  input: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 9px', font: 'inherit', fontSize: 13, boxSizing: 'border-box', width: '100%', color: 'var(--text-primary)', background: 'var(--surface)', marginBottom: 8 },
+  deleteBtn: { border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '0 2px' },
+  taskNameDone: { textDecoration: 'line-through', color: 'var(--text-secondary)' },
+  planHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
+  planProgress: { display: 'flex', alignItems: 'center', gap: 8 },
+  planProgressLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' },
+  planAddRow: { display: 'flex', gap: 8, marginBottom: 12 },
+  planAddBtn: { border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--primary)', color: '#fff', padding: '0 14px', cursor: 'pointer', fontWeight: 800, fontSize: 13 },
+  planGroupLabel: { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', margin: '0 0 5px' },
+  planItemRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: '6px 9px', background: 'var(--surface-soft)' },
+  planItemLabel: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', flex: 1, minWidth: 0 },
+  planItemTitle: { color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 }
