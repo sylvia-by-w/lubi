@@ -28,6 +28,7 @@ interface Props {
     endTime: string
   }) => void
   onClickTask: (task: TaskBlock) => void
+  onLogActualFromPlan: (task: TaskBlock) => void
 }
 
 interface LegacyDailyReview {
@@ -274,6 +275,7 @@ export default function WeeklyView({
   deadlines,
   onCreateSelection,
   onClickTask,
+  onLogActualFromPlan,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const days = useMemo(() => getWeekDays(weekStart), [weekStart])
@@ -584,6 +586,7 @@ export default function WeeklyView({
                   categories={categories}
                   onCreateSelection={handleCreateSelection}
                   onClickTask={onClickTask}
+                  onLogActualFromPlan={onLogActualFromPlan}
                 />
               )
             })}

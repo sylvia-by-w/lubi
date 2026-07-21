@@ -13,6 +13,7 @@ interface Props {
     endTime: string
   }) => void
   onClickTask: (task: TaskBlock) => void
+  onLogActualFromPlan: (task: TaskBlock) => void
 }
 
 function timeToMin(t: string) {
@@ -85,7 +86,7 @@ function readableTextColor(hex: string) {
   return brightness > 150 ? '#111827' : '#fff'
 }
 
-export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask }: Props) {
+export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask, onLogActualFromPlan }: Props) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const TOTAL = 24 * 60
 
@@ -179,6 +180,7 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
                 task={task}
                 categories={categories}
                 onClick={onClickTask}
+                onLogActual={onLogActualFromPlan}
               />
             )}
           </div>
@@ -254,10 +256,11 @@ function ActualBlock({ task, categories, onClick }: {
   )
 }
 
-function PlanBlock({ task, categories, onClick }: {
+function PlanBlock({ task, categories, onClick, onLogActual }: {
   task: TaskBlock
   categories: Category[]
   onClick: (task: TaskBlock) => void
+  onLogActual: (task: TaskBlock) => void
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
@@ -267,13 +270,14 @@ function PlanBlock({ task, categories, onClick }: {
       onPointerDown={e => e.stopPropagation()}
       onClick={e => { e.stopPropagation(); onClick(task) }}
       style={{
+        position: 'relative',
         width: '100%',
         height: '100%',
         background: hexToRgba(color, 0.14),
         border: `1.5px dashed ${color}`,
         boxSizing: 'border-box',
         padding: '3px 4px',
-        overflow: 'hidden',
+        overflow: 'visible',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-start',
@@ -293,6 +297,33 @@ function PlanBlock({ task, categories, onClick }: {
       <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
         {formatDuration(task.startTime, task.endTime)}
       </span>
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onLogActual(task) }}
+        title="按这个计划记录实际时间"
+        aria-label="记录实际时间"
+        style={{
+          position: 'absolute',
+          top: -7,
+          right: -7,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          border: `1.5px solid ${color}`,
+          background: '#fff',
+          color,
+          fontSize: 10,
+          lineHeight: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          padding: 0,
+          zIndex: 4,
+        }}
+      >
+        &#10003;
+      </button>
     </div>
   )
 }

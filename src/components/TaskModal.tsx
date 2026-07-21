@@ -15,6 +15,7 @@ interface Props {
   initialCategoryId?: string
   initialProjectId?: string
   initialProjectTaskId?: string
+  initialName?: string
   editTask?: TaskBlock | null
 }
 
@@ -49,7 +50,8 @@ function getInitialFormState({
   initialType,
   initialCategoryId,
   initialProjectId,
-}: Pick<Props, 'categories' | 'editTask' | 'initialDate' | 'initialEndTime' | 'initialStartTime' | 'initialType' | 'initialCategoryId' | 'initialProjectId'>): FormState {
+  initialName,
+}: Pick<Props, 'categories' | 'editTask' | 'initialDate' | 'initialEndTime' | 'initialStartTime' | 'initialType' | 'initialCategoryId' | 'initialProjectId' | 'initialName'>): FormState {
   if (editTask) {
     return {
       name: editTask.name,
@@ -67,7 +69,7 @@ function getInitialFormState({
   const nextCategoryId = initialCategoryId ?? categories[0]?.id ?? ''
   const nextType = initialType ?? 'plan'
   return {
-    name: '',
+    name: initialName ?? '',
     categoryId: nextCategoryId,
     projectId: initialProjectId ?? '',
     date: initialDate ?? '',
@@ -82,13 +84,13 @@ function getInitialFormState({
 export default function TaskModal({
   open, onClose, onSave, onDelete,
   categories, projects, initialDate, initialType, initialStartTime, initialEndTime,
-  initialCategoryId, initialProjectId, initialProjectTaskId, editTask
+  initialCategoryId, initialProjectId, initialProjectTaskId, initialName, editTask
 }: Props) {
   if (!open) return null
 
   const modalKey = editTask
     ? `edit-${editTask.id}`
-    : `new-${initialDate ?? ''}-${initialType ?? 'plan'}-${initialStartTime ?? ''}-${initialEndTime ?? ''}-${initialCategoryId ?? categories[0]?.id ?? ''}-${initialProjectId ?? ''}-${initialProjectTaskId ?? ''}`
+    : `new-${initialDate ?? ''}-${initialType ?? 'plan'}-${initialStartTime ?? ''}-${initialEndTime ?? ''}-${initialCategoryId ?? categories[0]?.id ?? ''}-${initialProjectId ?? ''}-${initialProjectTaskId ?? ''}-${initialName ?? ''}`
 
   return (
     <TaskModalContent
@@ -98,7 +100,7 @@ export default function TaskModal({
       onSave={onSave}
       categories={categories}
       projects={projects}
-      initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, initialCategoryId, initialProjectId })}
+      initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, initialCategoryId, initialProjectId, initialName })}
       editTask={editTask}
       projectTaskId={editTask?.projectTaskId ?? initialProjectTaskId}
     />

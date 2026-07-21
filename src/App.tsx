@@ -20,6 +20,7 @@ interface TaskDefaults {
   categoryId?: string
   projectId?: string
   projectTaskId?: string
+  name?: string
 }
 
 function getMonday(date: Date): Date {
@@ -94,6 +95,21 @@ export default function App() {
     setModalOpen(true)
   }
 
+  const handleLogActualFromPlan = (planTask: TaskBlock) => {
+    setEditTask(null)
+    setTaskDefaults({
+      date: planTask.date,
+      type: 'actual',
+      startTime: planTask.startTime,
+      endTime: planTask.endTime,
+      categoryId: planTask.categoryId,
+      projectId: planTask.projectId,
+      projectTaskId: planTask.projectTaskId,
+      name: planTask.name,
+    })
+    setModalOpen(true)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <NavBar
@@ -120,6 +136,7 @@ export default function App() {
           deadlines={deadlines}
           onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
+          onLogActualFromPlan={handleLogActualFromPlan}
         />
       ) : page === 'board' ? (
         <Board
@@ -182,6 +199,7 @@ export default function App() {
         initialCategoryId={taskDefaults?.categoryId}
         initialProjectId={taskDefaults?.projectId}
         initialProjectTaskId={taskDefaults?.projectTaskId}
+        initialName={taskDefaults?.name}
         editTask={editTask}
       />
 
