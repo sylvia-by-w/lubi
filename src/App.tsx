@@ -168,6 +168,8 @@ export default function App() {
           habitLogs={habitLogs}
           categories={categories}
           monthlyNotes={monthlyNotes}
+          projectTasks={projectTasks}
+          projects={projects}
           onToggleHabitLog={toggleHabitLog}
           onUpsertMonthlyNote={upsertMonthlyNote}
         />

@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import type { Category, HabitItem, HabitLog, MonthlyNote, MonthlyPlanItem } from '../types'
+import type { Category, HabitItem, HabitLog, MonthlyNote, MonthlyPlanItem, Project, ProjectTask } from '../types'
 import { formatDate } from '../utils/time'
 
 interface Props {
@@ -7,8 +7,19 @@ interface Props {
   habitLogs: HabitLog[]
   categories: Category[]
   monthlyNotes: MonthlyNote[]
+  projectTasks: ProjectTask[]
+  projects: Project[]
   onToggleHabitLog: (habitId: string, date: string) => void
   onUpsertMonthlyNote: (month: string, updates: Partial<Omit<MonthlyNote, 'id' | 'month'>>) => void
+}
+
+function resolveTaskCategory(task: ProjectTask, categories: Category[], projects: Project[]): Category | undefined {
+  if (task.categoryId) return categories.find(c => c.id === task.categoryId)
+  const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
+  return project ? categories.find(c => c.id === project.categoryId) : undefined
+}
+function isOverdueTask(task: ProjectTask, todayStr: string) {
+  return !!task.dueDate && task.dueDate < todayStr && task.status !== 'done' && task.status !== 'abandoned'
 }
 
 interface DayCell {
@@ -64,7 +75,7 @@ function buildWeeks(monthStart: Date): DayCell[][] {
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
 export default function MonthPlan({
-  habits, habitLogs, categories, monthlyNotes,
+  habits, habitLogs, categories, monthlyNotes, projectTasks, projects,
   onToggleHabitLog, onUpsertMonthlyNote,
 }: Props) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
@@ -105,16 +116,47 @@ export default function MonthPlan({
       if (!byCat.has(key)) byCat.set(key, [])
       byCat.get(key)!.push(item)
     })
-    const groups: { label: string; items: MonthlyPlanItem[] }[] = []
+    const groups: { key: string; label: string; color: string; items: MonthlyPlanItem[] }[] = []
     categories.forEach(c => {
       const list = byCat.get(c.id)
-      if (list && list.length) groups.push({ label: c.name, items: list })
+      if (list && list.length) groups.push({ key: c.id, label: c.name, color: c.color, items: list })
     })
     const none = byCat.get('__none__')
-    if (none && none.length) groups.push({ label: '未分类', items: none })
+    if (none && none.length) groups.push({ key: '__none__', label: '未分类', color: 'var(--text-muted)', items: none })
     return groups
   })()
   const planDoneCount = planItems.filter(i => i.done).length
+
+  const monthlyTasks = projectTasks.filter(t => t.dueDate && t.dueDate.startsWith(monthKey))
+  const monthDoneCount = monthlyTasks.filter(t => t.status === 'done').length
+  const monthAbandonedCount = monthlyTasks.filter(t => t.status === 'abandoned').length
+  const monthOverdueCount = monthlyTasks.filter(t => isOverdueTask(t, todayStr)).length
+  const monthPendingCount = monthlyTasks.length - monthDoneCount - monthAbandonedCount - monthOverdueCount
+  const monthCompletionPct = monthlyTasks.length ? monthDoneCount / monthlyTasks.length : 0
+
+  const taskCategoryBreakdown = (() => {
+    const byCat = new Map<string, ProjectTask[]>()
+    monthlyTasks.forEach(t => {
+      const cat = resolveTaskCategory(t, categories, projects)
+      const key = cat?.id ?? '__none__'
+      if (!byCat.has(key)) byCat.set(key, [])
+      byCat.get(key)!.push(t)
+    })
+    const rows: { key: string; label: string; color: string; done: number; pending: number; overdue: number; abandoned: number; total: number }[] = []
+    const buildRow = (key: string, label: string, color: string, list: ProjectTask[]) => {
+      const done = list.filter(t => t.status === 'done').length
+      const abandoned = list.filter(t => t.status === 'abandoned').length
+      const overdue = list.filter(t => isOverdueTask(t, todayStr)).length
+      rows.push({ key, label, color, done, pending: list.length - done - abandoned - overdue, overdue, abandoned, total: list.length })
+    }
+    categories.forEach(c => {
+      const list = byCat.get(c.id)
+      if (list && list.length) buildRow(c.id, c.name, c.color, list)
+    })
+    const none = byCat.get('__none__')
+    if (none && none.length) buildRow('__none__', '未分类', 'var(--text-muted)', none)
+    return rows
+  })()
 
   const handleAddPlanItem = () => {
     if (!newItemTitle.trim()) return
@@ -166,6 +208,20 @@ export default function MonthPlan({
     const doneCount = activeHabits.filter(h => isDone(h.id, ds)).length
     dailyTrend.push({ day: c.date.getDate(), pct: activeHabits.length ? doneCount / activeHabits.length : 0 })
   }))
+
+  const taskTrend: { day: number; totalDue: number; totalDone: number }[] = []
+  {
+    let runningDue = 0
+    let runningDone = 0
+    const totalDaysThisMonth = daysInMonth(monthStart)
+    for (let day = 1; day <= totalDaysThisMonth; day++) {
+      const ds = formatDate(new Date(monthStart.getFullYear(), monthStart.getMonth(), day))
+      if (ds > todayStr) break
+      runningDue += monthlyTasks.filter(t => t.dueDate === ds).length
+      runningDone += monthlyTasks.filter(t => t.completedAt && t.completedAt.slice(0, 10) === ds).length
+      taskTrend.push({ day, totalDue: runningDue, totalDone: runningDone })
+    }
+  }
 
   const handlePrevMonth = () => {
     const d = new Date(cursor)
@@ -250,29 +306,97 @@ export default function MonthPlan({
         {groupedPlanItems.length === 0 ? (
           <p style={styles.emptyText}>还没有计划事项，添加一条吧。</p>
         ) : (
-          groupedPlanItems.map(group => (
-            <div key={group.label} style={{ marginBottom: 10 }}>
-              <p style={styles.planGroupLabel}>{group.label}</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {group.items.map(item => (
-                  <div key={item.id} style={styles.planItemRow}>
-                    <label style={styles.planItemLabel}>
-                      <input type="checkbox" checked={item.done} onChange={() => handleTogglePlanItem(item.id)} />
-                      <span style={{ ...styles.planItemTitle, ...(item.done ? styles.taskNameDone : {}) }}>{item.title}</span>
-                    </label>
-                    <button style={styles.deleteBtn} onClick={() => handleDeletePlanItem(item.id)} aria-label="删除">x</button>
+          <div style={styles.planCardGrid}>
+            {groupedPlanItems.map(group => {
+              const groupDone = group.items.filter(i => i.done).length
+              const groupPct = group.items.length ? Math.round((groupDone / group.items.length) * 100) : 0
+              return (
+                <div key={group.key} style={styles.planCard}>
+                  <div style={styles.planCardHead}>
+                    <div style={styles.planCardHeadLeft}>
+                      <span style={{ ...styles.dot, background: group.color }} />
+                      <span style={styles.planCardLabel}>{group.label}</span>
+                    </div>
+                    <span style={styles.planCardMeta}>{groupDone}/{group.items.length} · {groupPct}%</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))
+                  <div style={styles.planCardBarTrack}>
+                    <div style={{ ...styles.planCardBarFill, width: `${groupPct}%`, background: group.color }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {group.items.map(item => (
+                      <div key={item.id} style={styles.planItemRow}>
+                        <label style={styles.planItemLabel}>
+                          <input type="checkbox" checked={item.done} onChange={() => handleTogglePlanItem(item.id)} />
+                          <span style={{ ...styles.planItemTitle, ...(item.done ? styles.taskNameDone : {}) }}>{item.title}</span>
+                        </label>
+                        <button style={styles.deleteBtn} onClick={() => handleDeletePlanItem(item.id)} aria-label="删除">x</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </section>
+
+      {monthlyTasks.length > 0 && (
+        <section style={{ marginBottom: 18 }}>
+          <h3 style={styles.panelTitle}>本月任务完成情况</h3>
+          <p style={styles.hint}>自动统计任务看板里截止日期落在这个月的任务，不用在这里手动维护。</p>
+
+          <div style={styles.statRow}>
+            <div style={styles.statCard}>
+              <div style={styles.statCardLabel}>完成率</div>
+              <div style={styles.statCardValue}>{Math.round(monthCompletionPct * 100)}%</div>
+            </div>
+            <div style={styles.statCard}>
+              <div style={styles.statCardLabel}>已完成</div>
+              <div style={{ ...styles.statCardValue, color: 'var(--success)' }}>{monthDoneCount}</div>
+            </div>
+            <div style={styles.statCard}>
+              <div style={styles.statCardLabel}>待办中</div>
+              <div style={styles.statCardValue}>{monthPendingCount}</div>
+            </div>
+            <div style={{ ...styles.statCard, ...styles.statCardDanger }}>
+              <div style={{ ...styles.statCardLabel, color: '#b91c1c' }}>逾期</div>
+              <div style={{ ...styles.statCardValue, color: '#b91c1c' }}>{monthOverdueCount}</div>
+            </div>
+            <div style={{ ...styles.statCard, ...styles.statCardMuted }}>
+              <div style={styles.statCardLabel}>已放弃</div>
+              <div style={{ ...styles.statCardValue, color: 'var(--text-muted)' }}>{monthAbandonedCount}</div>
+            </div>
+          </div>
+
+          <div style={styles.categoryBarPanel}>
+            <p style={styles.hint}>按分类：已完成 / 待办中 / 逾期 / 已放弃</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {taskCategoryBreakdown.map(row => (
+                <div key={row.key} style={styles.categoryBarRow}>
+                  <span style={styles.categoryBarLabel}>{row.label}</span>
+                  <div style={styles.categoryBarTrack}>
+                    {row.done > 0 && <div style={{ width: `${(row.done / row.total) * 100}%`, background: 'var(--success)' }} />}
+                    {row.pending > 0 && <div style={{ width: `${(row.pending / row.total) * 100}%`, background: 'var(--border)' }} />}
+                    {row.overdue > 0 && <div style={{ width: `${(row.overdue / row.total) * 100}%`, background: 'var(--danger)' }} />}
+                    {row.abandoned > 0 && <div style={{ width: `${(row.abandoned / row.total) * 100}%`, background: 'var(--text-muted)' }} />}
+                  </div>
+                  <span style={styles.categoryBarMeta}>{row.done}/{row.total}</span>
+                </div>
+              ))}
+            </div>
+            <div style={styles.categoryBarLegend}>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--success)' }} />已完成</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--border)' }} />待办中</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--danger)' }} />逾期</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--text-muted)' }} />已放弃</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {activeHabits.length === 0 ? (
         <p style={styles.emptyText}>还没有习惯。先去"看板"页左侧的"习惯"面板里加几个，比如早睡、运动、阅读，这里就会按周显示打卡情况。</p>
       ) : (
-        <>
           <div style={styles.weekGrid}>
             {weeks.map((week, wi) => {
               const pct = weekPct(week)
@@ -363,12 +487,28 @@ export default function MonthPlan({
               )
             })}
           </div>
+      )}
 
-          <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>每日完成率趋势</h3>
-            <TrendChart points={dailyTrend} />
-          </section>
-        </>
+      {(activeHabits.length > 0 || monthlyTasks.length > 0) && (
+        <section style={styles.panel}>
+          <h3 style={styles.panelTitle}>本月趋势</h3>
+          {activeHabits.length > 0 && (
+            <div style={styles.trendPanel}>
+              <p style={styles.hint}>每日习惯完成率</p>
+              <TrendChart points={dailyTrend} />
+            </div>
+          )}
+          {monthlyTasks.length > 0 && (
+            <div style={{ ...styles.trendPanel, marginBottom: 0 }}>
+              <p style={styles.hint}>任务累计完成</p>
+              <BurnupChart points={taskTrend} />
+              <div style={styles.categoryBarLegend}>
+                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--text-muted)', display: 'inline-block' }} />累计应完成任务</span>
+                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--success)', display: 'inline-block' }} />累计已完成任务</span>
+              </div>
+            </div>
+          )}
+        </section>
       )}
     </div>
   )
@@ -430,6 +570,33 @@ function TrendChart({ points }: { points: { day: number; pct: number }[] }) {
   )
 }
 
+function BurnupChart({ points }: { points: { day: number; totalDue: number; totalDone: number }[] }) {
+  const W = 900, H = 160, padL = 34, padB = 22, padT = 10
+  if (points.length === 0) {
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>本月还没有任务数据</div>
+  }
+  const innerW = W - padL - 10
+  const innerH = H - padT - padB
+  const maxDay = Math.max(...points.map(p => p.day), 1)
+  const maxValue = Math.max(1, ...points.map(p => p.totalDue), ...points.map(p => p.totalDone))
+  const xOf = (day: number) => padL + (maxDay <= 1 ? innerW / 2 : ((day - 1) / (maxDay - 1)) * innerW)
+  const yOf = (value: number) => padT + innerH - (value / maxValue) * innerH
+  const dueLine = points.map(p => `${xOf(p.day)},${yOf(p.totalDue)}`).join(' ')
+  const doneLine = points.map(p => `${xOf(p.day)},${yOf(p.totalDone)}`).join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={styles.chartBox}>
+      <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="var(--border)" />
+      <line x1={padL} y1={H - padB} x2={W - 6} y2={H - padB} stroke="var(--border)" />
+      <text x={4} y={padT + 6} fontSize="10" fill="var(--text-muted)">{maxValue}</text>
+      <text x={4} y={padT + innerH / 2 + 4} fontSize="10" fill="var(--text-muted)">{Math.round(maxValue / 2)}</text>
+      <text x={10} y={H - padB + 4} fontSize="10" fill="var(--text-muted)">0</text>
+      <polyline points={dueLine} fill="none" stroke="var(--text-muted)" strokeWidth={2} />
+      <polyline points={doneLine} fill="none" stroke="var(--success)" strokeWidth={2.5} />
+    </svg>
+  )
+}
+
 const styles: Record<string, CSSProperties> = {
   page: { flex: 1, overflow: 'auto', padding: 28, background: 'var(--app-bg)' },
   header: { display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 18, flexWrap: 'wrap' },
@@ -478,4 +645,28 @@ const styles: Record<string, CSSProperties> = {
   planItemRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: '6px 9px', background: 'var(--surface-soft)' },
   planItemLabel: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', flex: 1, minWidth: 0 },
   planItemTitle: { color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0 },
+  planCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 },
+  planCard: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: 12, boxShadow: 'var(--shadow-card)' },
+  planCardHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 },
+  planCardHeadLeft: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
+  planCardLabel: { fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  planCardMeta: { fontSize: 10, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 },
+  planCardBarTrack: { height: 5, background: 'var(--surface-muted)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
+  planCardBarFill: { height: '100%', borderRadius: 3 },
+  statRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 },
+  statCard: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: '10px 16px', minWidth: 96, boxShadow: 'var(--shadow-card)' },
+  statCardDanger: { border: '1px solid #fecaca', background: 'var(--danger-soft)' },
+  statCardMuted: { background: 'var(--surface-soft)' },
+  statCardLabel: { fontSize: 11, color: 'var(--text-secondary)' },
+  statCardValue: { fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' },
+  categoryBarPanel: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: '14px 16px', marginBottom: 18 },
+  categoryBarRow: { display: 'grid', gridTemplateColumns: '110px 1fr 64px', alignItems: 'center', gap: 8 },
+  categoryBarLabel: { fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  categoryBarTrack: { height: 10, borderRadius: 5, overflow: 'hidden', display: 'flex', background: 'var(--surface-muted)' },
+  categoryBarMeta: { fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right' },
+  categoryBarLegend: { display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12 },
+  categoryBarLegendItem: { fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 },
+  trendPanel: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: '14px 16px', marginBottom: 10 },
+  hint: { fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' },
 }
