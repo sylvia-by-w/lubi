@@ -25,7 +25,7 @@ interface Props {
 }
 
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
-const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
+const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成', abandoned: '已放弃' }
 const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日']
 type RowSortMode = 'default' | 'category' | 'priority'
 const ROW_SORT_LABEL: Record<RowSortMode, string> = { default: '项目管理页顺序', category: '按分类', priority: '按最高优先级任务' }
@@ -63,6 +63,9 @@ function taskCategory(task: ProjectTask, categories: Category[], projects: Proje
 }
 function isActiveProject(p: Project) {
   return !p.status || p.status === 'active'
+}
+function isOverdueTask(task: ProjectTask, todayStr: string) {
+  return !!task.dueDate && task.dueDate < todayStr && task.status !== 'done' && task.status !== 'abandoned'
 }
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -121,11 +124,13 @@ export default function Board({
   const [rowSortMode, setRowSortMode] = useState<RowSortMode>('default')
   const [showHiddenProjects, setShowHiddenProjects] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [postponingTaskId, setPostponingTaskId] = useState<string | null>(null)
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayStr = formatDate(startOfToday())
 
   const visibleTasks = [...projectTasks]
+    .filter(t => t.status !== 'abandoned')
     .filter(t => !hideDone || t.status !== 'done')
     .sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'))
 
@@ -190,6 +195,15 @@ export default function Board({
     })
   }
 
+  const handleAbandonTask = (task: ProjectTask) => {
+    onUpdateProjectTask(task.id, { status: 'abandoned' })
+  }
+  const handlePostponeTask = (task: ProjectTask, newDate: string) => {
+    if (!newDate) return
+    onUpdateProjectTask(task.id, { dueDate: newDate, postponed: true })
+    setPostponingTaskId(null)
+  }
+
   const editingTask = editingTaskId ? projectTasks.find(t => t.id === editingTaskId) : undefined
   const linkedPlanBlock = (taskId: string) => tasks.find(t => t.projectTaskId === taskId && t.type === 'plan')
   const editingPlanBlock = editingTask ? linkedPlanBlock(editingTask.id) : undefined
@@ -239,7 +253,7 @@ export default function Board({
   const priorityWeight: Record<string, number> = { high: 0, medium: 1, low: 2 }
   const tasksForDay = (ds: string) =>
     [...projectTasks]
-      .filter(t => t.dueDate === ds)
+      .filter(t => t.dueDate === ds && t.status !== 'abandoned')
       .sort((a, b) => {
         if ((a.status === 'done') !== (b.status === 'done')) return a.status === 'done' ? 1 : -1
         if (a.order != null && b.order != null) return a.order - b.order
@@ -417,20 +431,40 @@ export default function Board({
               {visibleTasks.map(task => {
                 const cat = taskCategory(task, categories, projects)
                 const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
+                const overdue = isOverdueTask(task, todayStr)
                 return (
-                  <div key={task.id} style={styles.taskRow}>
-                    <span style={{ ...styles.dot, background: cat?.color ?? '#999' }} />
-                    <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTaskId(task.id)}>
-                      <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }} title="点击编辑">{task.title}</div>
-                      <div style={styles.taskMeta}>
-                        {cat?.name ?? '无分类'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · 截止 ${task.dueDate}` : ''}
+                  <div key={task.id} style={{ ...styles.taskRow, flexDirection: 'column', alignItems: 'stretch', gap: overdue ? 6 : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ ...styles.dot, background: cat?.color ?? '#999' }} />
+                      <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTaskId(task.id)}>
+                        <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }} title="点击编辑">{task.title}</div>
+                        <div style={styles.taskMeta}>
+                          {cat?.name ?? '无分类'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · 截止 ${task.dueDate}` : ''}
+                        </div>
                       </div>
+                      <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={priorityLabel(task.priority)} />
+                      <button style={{ ...styles.statusPill, ...statusTone(task.status) }} onClick={() => toggleStatus(task)}>
+                        {STATUS_LABEL[task.status]}
+                      </button>
+                      <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label="删除任务">x</button>
                     </div>
-                    <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={priorityLabel(task.priority)} />
-                    <button style={{ ...styles.statusPill, ...statusTone(task.status) }} onClick={() => toggleStatus(task)}>
-                      {STATUS_LABEL[task.status]}
-                    </button>
-                    <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label="删除任务">x</button>
+                    {overdue && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={styles.overdueTag}>已逾期</span>
+                        {postponingTaskId === task.id ? (
+                          <input
+                            type="date"
+                            autoFocus
+                            style={styles.overduePostponeInput}
+                            onChange={e => handlePostponeTask(task, e.target.value)}
+                            onBlur={() => setPostponingTaskId(null)}
+                          />
+                        ) : (
+                          <button style={styles.overdueActionBtn} onClick={() => setPostponingTaskId(task.id)}>延后</button>
+                        )}
+                        <button style={styles.overdueActionBtn} onClick={() => handleAbandonTask(task)}>放弃</button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -576,6 +610,7 @@ export default function Board({
                           >
                             {cellTasks.map(task => {
                               const done = task.status === 'done'
+                              const overdue = isOverdueTask(task, todayStr)
                               return (
                                 <div
                                   key={task.id}
@@ -589,7 +624,7 @@ export default function Board({
                                   <span style={styles.dragHandle} title="拖动排序">::</span>
                                   <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
                                   <span
-                                    style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
+                                    style={{ ...styles.dayTaskTitle, ...(overdue ? styles.dayTaskOverdue : {}), ...(done ? styles.taskNameDone : {}) }}
                                     title={`${task.title}（点击编辑）`}
                                     onClick={() => setEditingTaskId(task.id)}
                                   >
@@ -637,6 +672,7 @@ export default function Board({
                         >
                           {cellTasks.map(task => {
                             const done = task.status === 'done'
+                            const overdue = isOverdueTask(task, todayStr)
                             return (
                               <div
                                 key={task.id}
@@ -650,7 +686,7 @@ export default function Board({
                                 <span style={styles.dragHandle} title="拖动排序">::</span>
                                 <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
                                 <span
-                                  style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
+                                  style={{ ...styles.dayTaskTitle, ...(overdue ? styles.dayTaskOverdue : {}), ...(done ? styles.taskNameDone : {}) }}
                                   title={`${task.title}（点击编辑）`}
                                   onClick={() => setEditingTaskId(task.id)}
                                 >
@@ -782,7 +818,11 @@ export default function Board({
                 style={{ ...styles.input, flex: 1 }}
                 type="date"
                 value={editingTask.dueDate ?? ''}
-                onChange={e => updateEditingTask({ dueDate: e.target.value || undefined })}
+                onChange={e => {
+                  const value = e.target.value
+                  const wasPostponed = !!editingTask.dueDate && !!value && value !== editingTask.dueDate
+                  updateEditingTask({ dueDate: value || undefined, ...(wasPostponed ? { postponed: true } : {}) })
+                }}
               />
               <select
                 style={{ ...styles.input, width: 110 }}
@@ -814,6 +854,12 @@ export default function Board({
               />
             </div>
 
+            <button
+              style={styles.modalAbandonBtn}
+              onClick={() => { onUpdateProjectTask(editingTask.id, { status: 'abandoned' }); setEditingTaskId(null) }}
+            >
+              放弃任务
+            </button>
             <button
               style={styles.modalDeleteBtn}
               onClick={() => { onDeleteProjectTask(editingTask.id); setEditingTaskId(null) }}
@@ -974,6 +1020,7 @@ const styles: Record<string, CSSProperties> = {
   dayTaskRow: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'grab' },
   dragHandle: { color: 'var(--text-muted)', fontSize: 10, cursor: 'grab', flexShrink: 0, letterSpacing: -1 },
   dayTaskTitle: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' },
+  dayTaskOverdue: { color: 'var(--danger)' },
   projectTag: { fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'var(--surface-muted)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 },
   dayTable: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 },
   dayTh: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontWeight: 700, fontSize: 10, textAlign: 'center', lineHeight: 1.4, color: 'var(--text-secondary)' },
@@ -987,11 +1034,15 @@ const styles: Record<string, CSSProperties> = {
   rowSortLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 },
   rowSortSelect: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '4px 22px 4px 8px', font: 'inherit', fontSize: 11, color: 'var(--text-primary)', background: 'var(--surface)' },
   projectHeadCell: { textAlign: 'left', paddingLeft: 8, width: 92 },
-  projectRowLabel: { border: '1px solid var(--border-soft)', background: 'var(--surface-soft)', padding: '5px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', cursor: 'grab', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  projectRowLabel: { border: '1px solid var(--border-soft)', background: 'var(--surface-soft)', padding: '5px 8px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', cursor: 'grab', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   modalBox: { background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: 16, width: 320, boxShadow: 'var(--shadow-popover)', maxHeight: '80vh', overflow: 'auto', boxSizing: 'border-box' },
   modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   modalTitle: { margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' },
   smallLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 3, display: 'block' },
   modalDeleteBtn: { border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--danger)', padding: '8px 10px', width: '100%', cursor: 'pointer', fontWeight: 700, fontSize: 12, marginTop: 4 },
+  modalAbandonBtn: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-secondary)', padding: '8px 10px', width: '100%', cursor: 'pointer', fontWeight: 700, fontSize: 12, marginTop: 8 },
+  overdueTag: { fontSize: 9, fontWeight: 800, color: 'var(--danger)', background: 'var(--danger-soft)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap', flexShrink: 0 },
+  overdueActionBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
+  overduePostponeInput: { border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', font: 'inherit', fontSize: 10, boxSizing: 'border-box' },
 }

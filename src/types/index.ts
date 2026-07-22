@@ -20,7 +20,7 @@ export interface Project {
 }
 
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived'
-export type ProjectTaskStatus = 'todo' | 'in_progress' | 'done'
+export type ProjectTaskStatus = 'todo' | 'in_progress' | 'done' | 'abandoned'
 export type PriorityLevel = 'low' | 'medium' | 'high'
 
 export interface ProjectTask {
@@ -34,6 +34,7 @@ export interface ProjectTask {
   estimatedHours?: number
   priority?: PriorityLevel
   order?: number
+  postponed?: boolean
   createdAt: string
   completedAt?: string
 }
