@@ -1,4 +1,4 @@
-import type { Deadline, Project } from '../types'
+import type { Deadline, PriorityLevel, Project } from '../types'
 import { getWeekDays } from '../utils/time'
 
 interface Props {
@@ -31,6 +31,15 @@ function deadlineLabel(days: number) {
   return `还剩${days}天`
 }
 
+function priorityBarColor(priority?: PriorityLevel) {
+  if (priority === 'high') return '#dc2626'
+  if (priority === 'medium') return '#d97706'
+  if (priority === 'low') return '#0284c7'
+  return '#d1d5db'
+}
+
+const DEADLINE_SHOW_COUNT = 3
+
 export default function NavBar({
   weekStart,
   onPrevWeek,
@@ -40,19 +49,17 @@ export default function NavBar({
   onOpenSettings,
   onOpenDeadlines,
   deadlines,
-  projects,
   currentPage,
   onChangePage,
 }: Props) {
   const days = getWeekDays(weekStart)
   const startLabel = days[0].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
   const endLabel = days[6].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  const nearestDeadline = [...deadlines]
+  const upcomingDeadlines = [...deadlines]
     .filter(deadline => deadline.date >= todayStr())
-    .sort((a, b) => `${a.date}T${a.time ?? '00:00'}`.localeCompare(`${b.date}T${b.time ?? '00:00'}`))[0]
-  const nearestProject = nearestDeadline?.projectId
-    ? projects.find(project => project.id === nearestDeadline.projectId)
-    : undefined
+    .sort((a, b) => `${a.date}T${a.time ?? '00:00'}`.localeCompare(`${b.date}T${b.time ?? '00:00'}`))
+  const visibleDeadlines = upcomingDeadlines.slice(0, DEADLINE_SHOW_COUNT)
+  const overflowCount = Math.max(0, upcomingDeadlines.length - DEADLINE_SHOW_COUNT)
 
   return (
     <div style={styles.nav}>
@@ -82,24 +89,28 @@ export default function NavBar({
       </div>
 
       <div style={styles.right}>
-        <button style={styles.deadlineBlock} onClick={onOpenDeadlines}>
-          {nearestDeadline ? (
-            <>
-              <span style={styles.deadlineKicker}>截止日期</span>
-              <span style={styles.deadlineTitle}>{nearestDeadline.title}</span>
-              <span style={styles.deadlineMeta}>
-                {deadlineLabel(daysUntil(nearestDeadline.date))}
-                {nearestProject ? ` - ${nearestProject.name}` : ''}
-              </span>
-            </>
-          ) : (
-            <>
-              <span style={styles.deadlineKicker}>截止日期</span>
-              <span style={styles.deadlineTitle}>暂无即将到来的截止日期</span>
-              <span style={styles.deadlineMeta}>+ 添加</span>
-            </>
-          )}
-        </button>
+        {visibleDeadlines.length === 0 ? (
+          <button style={styles.deadlineBlock} onClick={onOpenDeadlines}>
+            <span style={styles.deadlineKicker}>截止日期</span>
+            <span style={styles.deadlineTitle}>暂无即将到来的截止日期</span>
+            <span style={styles.deadlineMeta}>+ 添加</span>
+          </button>
+        ) : (
+          <div style={styles.deadlineRow}>
+            {visibleDeadlines.map(deadline => (
+              <button key={deadline.id} style={styles.deadlineCard} onClick={onOpenDeadlines}>
+                <span style={{ ...styles.deadlineCardBar, background: priorityBarColor(deadline.priority) }} />
+                <span style={styles.deadlineCardBody}>
+                  <span style={styles.deadlineDays}>{deadlineLabel(daysUntil(deadline.date))}</span>
+                  <span style={styles.deadlineCardTitle}>{deadline.title}</span>
+                </span>
+              </button>
+            ))}
+            {overflowCount > 0 && (
+              <button style={styles.deadlineOverflowBtn} onClick={onOpenDeadlines}>+{overflowCount}</button>
+            )}
+          </div>
+        )}
         <button style={styles.weekBtn} onClick={onPrevWeek}>&#8249;</button>
         <span style={styles.weekLabel}>{startLabel} - {endLabel}</span>
         <button style={styles.weekBtn} onClick={onNextWeek}>&#8250;</button>
@@ -197,6 +208,63 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'rgba(255, 255, 255, 0.55)',
     fontSize: 11,
     fontWeight: 600,
+  },
+  deadlineRow: {
+    display: 'flex',
+    alignItems: 'stretch',
+    gap: 6,
+    maxWidth: 360,
+    overflowX: 'auto',
+  },
+  deadlineCard: {
+    display: 'flex',
+    alignItems: 'stretch',
+    flexShrink: 0,
+    border: 'none',
+    borderRadius: 'var(--radius-sm)',
+    background: '#fff',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    padding: 0,
+    textAlign: 'left',
+  },
+  deadlineCardBar: {
+    width: 4,
+    flexShrink: 0,
+  },
+  deadlineCardBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0,
+    padding: '5px 11px',
+    minWidth: 0,
+  },
+  deadlineDays: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#181818',
+    lineHeight: 1.25,
+    whiteSpace: 'nowrap',
+  },
+  deadlineCardTitle: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#6b7280',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 120,
+  },
+  deadlineOverflowBtn: {
+    flexShrink: 0,
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'rgba(255, 255, 255, 0.08)',
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    padding: '0 12px',
   },
   weekBtn: {
     width: 32,
