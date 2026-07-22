@@ -1,5 +1,6 @@
 import type { Deadline, PriorityLevel, Project } from '../types'
 import { getWeekDays } from '../utils/time'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface Props {
   weekStart: Date
@@ -25,10 +26,10 @@ function daysUntil(date: string) {
   return Math.ceil((target.getTime() - today.getTime()) / 86400000)
 }
 
-function deadlineLabel(days: number) {
-  if (days === 0) return '今天'
-  if (days === 1) return '还剩1天'
-  return `还剩${days}天`
+function deadlineLabel(days: number, t: (path: string, vars?: Record<string, string | number>) => string) {
+  if (days === 0) return t('nav.today')
+  if (days === 1) return t('nav.daysLeftOne')
+  return t('nav.daysLeft', { days })
 }
 
 function priorityBarColor(priority?: PriorityLevel) {
@@ -52,9 +53,11 @@ export default function NavBar({
   currentPage,
   onChangePage,
 }: Props) {
+  const { t, lang } = useLanguage()
   const days = getWeekDays(weekStart)
-  const startLabel = days[0].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  const endLabel = days[6].toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  const locale = lang === 'en' ? 'en-US' : 'zh-CN'
+  const startLabel = days[0].toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+  const endLabel = days[6].toLocaleDateString(locale, { month: 'short', day: 'numeric' })
   const upcomingDeadlines = [...deadlines]
     .filter(deadline => deadline.date >= todayStr())
     .sort((a, b) => `${a.date}T${a.time ?? '00:00'}`.localeCompare(`${b.date}T${b.time ?? '00:00'}`))
@@ -69,31 +72,31 @@ export default function NavBar({
         <button
           style={{ ...styles.tab, ...(currentPage === 'weekly' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('weekly')}
-        >时间日志</button>
+        >{t('nav.timeLog')}</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'board' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('board')}
-        >任务看板</button>
+        >{t('nav.taskBoard')}</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'month' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('month')}
-        >月度计划</button>
+        >{t('nav.monthPlan')}</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'projects' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('projects')}
-        >项目管理</button>
+        >{t('nav.projects')}</button>
         <button
           style={{ ...styles.tab, ...(currentPage === 'statistics' ? styles.tabActive : {}) }}
           onClick={() => onChangePage('statistics')}
-        >统计分析</button>
+        >{t('nav.statistics')}</button>
       </div>
 
       <div style={styles.right}>
         {visibleDeadlines.length === 0 ? (
           <button style={styles.deadlineBlock} onClick={onOpenDeadlines}>
-            <span style={styles.deadlineKicker}>截止日期</span>
-            <span style={styles.deadlineTitle}>暂无即将到来的截止日期</span>
-            <span style={styles.deadlineMeta}>+ 添加</span>
+            <span style={styles.deadlineKicker}>{t('nav.deadlineKicker')}</span>
+            <span style={styles.deadlineTitle}>{t('nav.noUpcomingDeadline')}</span>
+            <span style={styles.deadlineMeta}>{t('nav.addDeadline')}</span>
           </button>
         ) : (
           <div style={styles.deadlineRow}>
@@ -101,7 +104,7 @@ export default function NavBar({
               <button key={deadline.id} style={styles.deadlineCard} onClick={onOpenDeadlines}>
                 <span style={{ ...styles.deadlineCardBar, background: priorityBarColor(deadline.priority) }} />
                 <span style={styles.deadlineCardBody}>
-                  <span style={styles.deadlineDays}>{deadlineLabel(daysUntil(deadline.date))}</span>
+                  <span style={styles.deadlineDays}>{deadlineLabel(daysUntil(deadline.date), t)}</span>
                   <span style={styles.deadlineCardTitle}>{deadline.title}</span>
                 </span>
               </button>
@@ -114,9 +117,9 @@ export default function NavBar({
         <button style={styles.weekBtn} onClick={onPrevWeek}>&#8249;</button>
         <span style={styles.weekLabel}>{startLabel} - {endLabel}</span>
         <button style={styles.weekBtn} onClick={onNextWeek}>&#8250;</button>
-        <button style={styles.settingsBtn} onClick={onExportWeeklyExcel}>导出</button>
-        <button style={styles.settingsBtn} onClick={onOpenSettings}>设置</button>
-        <button style={styles.addBtn} onClick={onAddTask}>+ 添加任务</button>
+        <button style={styles.settingsBtn} onClick={onExportWeeklyExcel}>{t('nav.export')}</button>
+        <button style={styles.settingsBtn} onClick={onOpenSettings}>{t('nav.settings')}</button>
+        <button style={styles.addBtn} onClick={onAddTask}>{t('nav.addTask')}</button>
       </div>
     </div>
   )

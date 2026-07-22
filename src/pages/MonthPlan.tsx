@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, HabitLog, MonthlyNote, MonthlyPlanItem, Project, ProjectTask } from '../types'
 import { formatDate } from '../utils/time'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface Props {
   habits: HabitItem[]
@@ -41,8 +42,9 @@ function startOfToday() {
 function monthKeyOf(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-function monthLabelOf(d: Date) {
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`
+function monthLabelOf(d: Date, lang: string) {
+  const locale = lang === 'en' ? 'en-US' : 'zh-CN'
+  return d.toLocaleDateString(locale, { year: 'numeric', month: 'long' })
 }
 function mondayIndex(d: Date) {
   const day = d.getDay()
@@ -72,18 +74,18 @@ function buildWeeks(monthStart: Date): DayCell[][] {
   return weeks
 }
 
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-
 export default function MonthPlan({
   habits, habitLogs, categories, monthlyNotes, projectTasks, projects,
   onToggleHabitLog, onUpsertMonthlyNote,
 }: Props) {
+  const { t, lang } = useLanguage()
+  const WEEKDAY_LABELS = lang === 'en' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['一', '二', '三', '四', '五', '六', '日']
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
   const [newItemTitle, setNewItemTitle] = useState('')
   const [newItemCategoryId, setNewItemCategoryId] = useState('')
   const monthStart = startOfMonth(cursor)
   const monthKey = monthKeyOf(monthStart)
-  const monthLabel = monthLabelOf(monthStart)
+  const monthLabel = monthLabelOf(monthStart, lang)
   const today = startOfToday()
   const todayStr = formatDate(today)
 
@@ -104,7 +106,7 @@ export default function MonthPlan({
       if (list && list.length) groups.push({ label: c.name, habits: list })
     })
     const none = byCat.get('__none__')
-    if (none && none.length) groups.push({ label: '未分类', habits: none })
+    if (none && none.length) groups.push({ label: t('monthPlan.uncategorized'), habits: none })
     return groups
   })()
 
@@ -122,7 +124,7 @@ export default function MonthPlan({
       if (list && list.length) groups.push({ key: c.id, label: c.name, color: c.color, items: list })
     })
     const none = byCat.get('__none__')
-    if (none && none.length) groups.push({ key: '__none__', label: '未分类', color: 'var(--text-muted)', items: none })
+    if (none && none.length) groups.push({ key: '__none__', label: t('monthPlan.uncategorized'), color: 'var(--text-muted)', items: none })
     return groups
   })()
   const planDoneCount = planItems.filter(i => i.done).length
@@ -154,7 +156,7 @@ export default function MonthPlan({
       if (list && list.length) buildRow(c.id, c.name, c.color, list)
     })
     const none = byCat.get('__none__')
-    if (none && none.length) buildRow('__none__', '未分类', 'var(--text-muted)', none)
+    if (none && none.length) buildRow('__none__', t('monthPlan.uncategorized'), 'var(--text-muted)', none)
     return rows
   })()
 
@@ -239,10 +241,10 @@ export default function MonthPlan({
     <div style={styles.page}>
       <div style={styles.header}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <h1 style={styles.title}>月度计划</h1>
+          <h1 style={styles.title}>{t('monthPlan.title')}</h1>
           <input
             style={styles.quoteInput}
-            placeholder="这个月想对自己说的话…"
+            placeholder={t('monthPlan.quotePlaceholder')}
             value={note?.quote ?? ''}
             onChange={e => onUpsertMonthlyNote(monthKey, { quote: e.target.value })}
           />
@@ -262,10 +264,10 @@ export default function MonthPlan({
             </div>
           )}
           <div style={styles.reminderBox}>
-            <p style={styles.reminderLabel}>备注</p>
+            <p style={styles.reminderLabel}>{t('monthPlan.note')}</p>
             <input
               style={styles.reminderInput}
-              placeholder="比如：禁止熬夜"
+              placeholder={t('monthPlan.reminderPlaceholder')}
               value={note?.reminder ?? ''}
               onChange={e => onUpsertMonthlyNote(monthKey, { reminder: e.target.value })}
             />
@@ -275,11 +277,11 @@ export default function MonthPlan({
 
       <section style={{ ...styles.panel, marginBottom: 18 }}>
         <div style={styles.planHeader}>
-          <h3 style={styles.panelTitle}>本月计划</h3>
+          <h3 style={styles.panelTitle}>{t('monthPlan.planTitle')}</h3>
           {planItems.length > 0 && (
             <div style={styles.planProgress}>
               <MonthDonut pct={planItems.length ? planDoneCount / planItems.length : 0} size={36} />
-              <span style={styles.planProgressLabel}>{planDoneCount}/{planItems.length} 已完成</span>
+              <span style={styles.planProgressLabel}>{t('monthPlan.planProgressLabel', { done: planDoneCount, total: planItems.length })}</span>
             </div>
           )}
         </div>
@@ -287,7 +289,7 @@ export default function MonthPlan({
         <div style={styles.planAddRow}>
           <input
             style={{ ...styles.input, flex: 1, marginBottom: 0 }}
-            placeholder="添加一条计划事项…"
+            placeholder={t('monthPlan.addPlanPlaceholder')}
             value={newItemTitle}
             onChange={e => setNewItemTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddPlanItem()}
@@ -297,14 +299,14 @@ export default function MonthPlan({
             value={newItemCategoryId}
             onChange={e => setNewItemCategoryId(e.target.value)}
           >
-            <option value="">分类</option>
+            <option value="">{t('deadlineModal.category')}</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <button style={styles.planAddBtn} onClick={handleAddPlanItem}>添加</button>
+          <button style={styles.planAddBtn} onClick={handleAddPlanItem}>{t('common.add')}</button>
         </div>
 
         {groupedPlanItems.length === 0 ? (
-          <p style={styles.emptyText}>还没有计划事项，添加一条吧。</p>
+          <p style={styles.emptyText}>{t('monthPlan.noPlanItems')}</p>
         ) : (
           <div style={styles.planCardGrid}>
             {groupedPlanItems.map(group => {
@@ -329,7 +331,7 @@ export default function MonthPlan({
                           <input type="checkbox" checked={item.done} onChange={() => handleTogglePlanItem(item.id)} />
                           <span style={{ ...styles.planItemTitle, ...(item.done ? styles.taskNameDone : {}) }}>{item.title}</span>
                         </label>
-                        <button style={styles.deleteBtn} onClick={() => handleDeletePlanItem(item.id)} aria-label="删除">x</button>
+                        <button style={styles.deleteBtn} onClick={() => handleDeletePlanItem(item.id)} aria-label={t('common.delete')}>x</button>
                       </div>
                     ))}
                   </div>
@@ -342,34 +344,34 @@ export default function MonthPlan({
 
       {monthlyTasks.length > 0 && (
         <section style={{ marginBottom: 18 }}>
-          <h3 style={styles.panelTitle}>本月任务完成情况</h3>
-          <p style={styles.hint}>自动统计任务看板里截止日期落在这个月的任务，不用在这里手动维护。</p>
+          <h3 style={styles.panelTitle}>{t('monthPlan.taskSectionTitle')}</h3>
+          <p style={styles.hint}>{t('monthPlan.taskSectionHint')}</p>
 
           <div style={styles.statRow}>
             <div style={styles.statCard}>
-              <div style={styles.statCardLabel}>完成率</div>
+              <div style={styles.statCardLabel}>{t('monthPlan.completionRate')}</div>
               <div style={styles.statCardValue}>{Math.round(monthCompletionPct * 100)}%</div>
             </div>
             <div style={styles.statCard}>
-              <div style={styles.statCardLabel}>已完成</div>
+              <div style={styles.statCardLabel}>{t('monthPlan.done')}</div>
               <div style={{ ...styles.statCardValue, color: 'var(--success)' }}>{monthDoneCount}</div>
             </div>
             <div style={styles.statCard}>
-              <div style={styles.statCardLabel}>待办中</div>
+              <div style={styles.statCardLabel}>{t('monthPlan.pending')}</div>
               <div style={styles.statCardValue}>{monthPendingCount}</div>
             </div>
             <div style={{ ...styles.statCard, ...styles.statCardDanger }}>
-              <div style={{ ...styles.statCardLabel, color: '#b91c1c' }}>逾期</div>
+              <div style={{ ...styles.statCardLabel, color: '#b91c1c' }}>{t('monthPlan.overdue')}</div>
               <div style={{ ...styles.statCardValue, color: '#b91c1c' }}>{monthOverdueCount}</div>
             </div>
             <div style={{ ...styles.statCard, ...styles.statCardMuted }}>
-              <div style={styles.statCardLabel}>已放弃</div>
+              <div style={styles.statCardLabel}>{t('monthPlan.abandoned')}</div>
               <div style={{ ...styles.statCardValue, color: 'var(--text-muted)' }}>{monthAbandonedCount}</div>
             </div>
           </div>
 
           <div style={styles.categoryBarPanel}>
-            <p style={styles.hint}>按分类：已完成 / 待办中 / 逾期 / 已放弃</p>
+            <p style={styles.hint}>{t('monthPlan.byCategoryHint')}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {taskCategoryBreakdown.map(row => (
                 <div key={row.key} style={styles.categoryBarRow}>
@@ -385,17 +387,17 @@ export default function MonthPlan({
               ))}
             </div>
             <div style={styles.categoryBarLegend}>
-              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--success)' }} />已完成</span>
-              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--border)' }} />待办中</span>
-              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--danger)' }} />逾期</span>
-              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--text-muted)' }} />已放弃</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--success)' }} />{t('monthPlan.done')}</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--border)' }} />{t('monthPlan.pending')}</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--danger)' }} />{t('monthPlan.overdue')}</span>
+              <span style={styles.categoryBarLegendItem}><span style={{ ...styles.dot, borderRadius: 2, background: 'var(--text-muted)' }} />{t('monthPlan.abandoned')}</span>
             </div>
           </div>
         </section>
       )}
 
       {activeHabits.length === 0 ? (
-        <p style={styles.emptyText}>还没有习惯。先去"看板"页左侧的"习惯"面板里加几个，比如早睡、运动、阅读，这里就会按周显示打卡情况。</p>
+        <p style={styles.emptyText}>{t('monthPlan.noHabits')}</p>
       ) : (
           <div style={styles.weekGrid}>
             {weeks.map((week, wi) => {
@@ -403,14 +405,14 @@ export default function MonthPlan({
               return (
                 <div key={wi} style={styles.weekPanel}>
                   <div style={styles.weekPanelHead}>
-                    <span style={styles.weekLabel}>第 {wi + 1} 周</span>
+                    <span style={styles.weekLabel}>{t('monthPlan.weekLabel', { n: wi + 1 })}</span>
                     {pct !== null && <MonthDonut pct={pct} size={26} />}
                   </div>
                   <table style={styles.habitTable}>
                     <thead>
                       <tr>
-                        <th style={{ ...styles.habitTh, ...styles.habitThCat }}>类别</th>
-                        <th style={{ ...styles.habitTh, ...styles.habitThItem }}>事项</th>
+                        <th style={{ ...styles.habitTh, ...styles.habitThCat }}>{t('monthPlan.categoryColumn')}</th>
+                        <th style={{ ...styles.habitTh, ...styles.habitThItem }}>{t('monthPlan.itemColumn')}</th>
                         {week.map((c, ci) => (
                           <th
                             key={ci}
@@ -455,7 +457,7 @@ export default function MonthPlan({
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={2} style={styles.habitTfLabel}>每日完成率</td>
+                        <td colSpan={2} style={styles.habitTfLabel}>{t('monthPlan.dailyCompletionRate')}</td>
                         {week.map((c, ci) => {
                           const ds = formatDate(c.date)
                           const countable = c.inMonth && ds <= todayStr
@@ -469,7 +471,7 @@ export default function MonthPlan({
                         })}
                       </tr>
                       <tr>
-                        <td colSpan={2} style={styles.habitTfLabel}>已完成/未完成</td>
+                        <td colSpan={2} style={styles.habitTfLabel}>{t('monthPlan.doneVsNotDone')}</td>
                         {week.map((c, ci) => {
                           const ds = formatDate(c.date)
                           const countable = c.inMonth && ds <= todayStr
@@ -491,20 +493,20 @@ export default function MonthPlan({
 
       {(activeHabits.length > 0 || monthlyTasks.length > 0) && (
         <section style={styles.panel}>
-          <h3 style={styles.panelTitle}>本月趋势</h3>
+          <h3 style={styles.panelTitle}>{t('monthPlan.trendTitle')}</h3>
           {activeHabits.length > 0 && (
             <div style={styles.trendPanel}>
-              <p style={styles.hint}>每日习惯完成率</p>
-              <TrendChart points={dailyTrend} />
+              <p style={styles.hint}>{t('monthPlan.dailyHabitRate')}</p>
+              <TrendChart points={dailyTrend} emptyText={t('monthPlan.noCheckinData')} />
             </div>
           )}
           {monthlyTasks.length > 0 && (
             <div style={{ ...styles.trendPanel, marginBottom: 0 }}>
-              <p style={styles.hint}>任务累计完成</p>
-              <BurnupChart points={taskTrend} />
+              <p style={styles.hint}>{t('monthPlan.taskCumulative')}</p>
+              <BurnupChart points={taskTrend} emptyText={t('monthPlan.noTaskData')} />
               <div style={styles.categoryBarLegend}>
-                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--text-muted)', display: 'inline-block' }} />累计应完成任务</span>
-                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--success)', display: 'inline-block' }} />累计已完成任务</span>
+                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--text-muted)', display: 'inline-block' }} />{t('monthPlan.cumulativeDue')}</span>
+                <span style={styles.categoryBarLegendItem}><span style={{ width: 14, height: 2, background: 'var(--success)', display: 'inline-block' }} />{t('monthPlan.cumulativeDone')}</span>
               </div>
             </div>
           )}
@@ -537,10 +539,10 @@ function MonthDonut({ pct, size }: { pct: number; size: number }) {
   )
 }
 
-function TrendChart({ points }: { points: { day: number; pct: number }[] }) {
+function TrendChart({ points, emptyText }: { points: { day: number; pct: number }[]; emptyText: string }) {
   const W = 900, H = 160, padL = 34, padB = 22, padT = 10
   if (points.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>本月还没有打卡记录</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{emptyText}</div>
   }
   const innerW = W - padL - 10
   const innerH = H - padT - padB
@@ -570,10 +572,10 @@ function TrendChart({ points }: { points: { day: number; pct: number }[] }) {
   )
 }
 
-function BurnupChart({ points }: { points: { day: number; totalDue: number; totalDone: number }[] }) {
+function BurnupChart({ points, emptyText }: { points: { day: number; totalDue: number; totalDone: number }[]; emptyText: string }) {
   const W = 900, H = 160, padL = 34, padB = 22, padT = 10
   if (points.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>本月还没有任务数据</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{emptyText}</div>
   }
   const innerW = W - padL - 10
   const innerH = H - padT - padB

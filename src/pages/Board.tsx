@@ -1,6 +1,9 @@
 import { useState, type CSSProperties } from 'react'
 import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
 import { formatDate, timeToMinutes, minutesToTime } from '../utils/time'
+import { useLanguage } from '../i18n/LanguageContext'
+
+type TFunc = (path: string, vars?: Record<string, string | number>) => string
 
 interface Props {
   projectTasks: ProjectTask[]
@@ -25,10 +28,23 @@ interface Props {
 }
 
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
-const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成', abandoned: '已放弃' }
-const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日']
+function statusLabel(status: ProjectTaskStatus, t: TFunc): string {
+  if (status === 'todo') return t('projects.todo')
+  if (status === 'in_progress') return t('projects.active')
+  if (status === 'done') return t('projects.completed')
+  return t('monthPlan.abandoned')
+}
+function weekdayLabel(i: number, lang: string): string {
+  if (lang === 'en') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]
+  return '周' + ['一', '二', '三', '四', '五', '六', '日'][i]
+}
 type RowSortMode = 'default' | 'category' | 'priority'
-const ROW_SORT_LABEL: Record<RowSortMode, string> = { default: '项目管理页顺序', category: '按分类', priority: '按最高优先级任务' }
+function rowSortLabel(mode: RowSortMode, t: TFunc): string {
+  if (mode === 'category') return t('board.sortByCategory')
+  if (mode === 'priority') return t('board.sortByPriority')
+  return t('board.sortDefault')
+}
+const ROW_SORT_MODES: RowSortMode[] = ['default', 'category', 'priority']
 
 function addDays(d: Date, n: number) {
   const x = new Date(d)
@@ -50,11 +66,11 @@ function priorityColor(priority?: PriorityLevel) {
   if (priority === 'low') return 'var(--success)'
   return 'var(--text-muted)'
 }
-function priorityLabel(priority?: PriorityLevel) {
-  if (priority === 'high') return '高'
-  if (priority === 'medium') return '中'
-  if (priority === 'low') return '低'
-  return '无优先级'
+function priorityLabel(priority: PriorityLevel | undefined, t: TFunc) {
+  if (priority === 'high') return t('common.high')
+  if (priority === 'medium') return t('common.medium')
+  if (priority === 'low') return t('common.low')
+  return t('board.noPriority')
 }
 function taskCategory(task: ProjectTask, categories: Category[], projects: Project[]): Category | undefined {
   if (task.categoryId) return categories.find(c => c.id === task.categoryId)
@@ -111,6 +127,7 @@ export default function Board({
   onAddTask, onUpdateTask, onDeleteTask,
   onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit,
 }: Props) {
+  const { t, lang } = useLanguage()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfToday()))
   const [form, setForm] = useState<NewTaskForm>({ ...emptyForm, categoryId: categories[0]?.id ?? '' })
   const [hideDone, setHideDone] = useState(false)
@@ -361,45 +378,45 @@ export default function Board({
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>任务看板</h1>
-          <p style={styles.subtitle}>所有任务都在这里管理。实际花费的时间仍会同步到周视图和统计页。</p>
+          <h1 style={styles.title}>{t('nav.taskBoard')}</h1>
+          <p style={styles.subtitle}>{t('board.subtitle')}</p>
         </div>
         <div style={styles.summaryRow}>
-          {overallHabitStats && <MonthDonut pct={overallHabitStats.pct} />}
-          <SummaryMetric label="待办" value={String(todoCount)} />
-          <SummaryMetric label="进行中" value={String(inProgressCount)} />
-          <SummaryMetric label="已完成" value={String(doneCount)} />
+          {overallHabitStats && <MonthDonut pct={overallHabitStats.pct} label={t('board.monthlyHabitsLabel')} />}
+          <SummaryMetric label={t('projects.todo')} value={String(todoCount)} />
+          <SummaryMetric label={t('projects.active')} value={String(inProgressCount)} />
+          <SummaryMetric label={t('projects.completed')} value={String(doneCount)} />
         </div>
       </div>
 
       <div style={styles.columns}>
         <div style={styles.leftCol}>
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>添加任务</h3>
+            <h3 style={styles.panelTitle}>{t('board.addTaskTitle')}</h3>
             <input
               style={styles.input}
-              placeholder="任务名称"
+              placeholder={t('taskModal.taskName')}
               value={form.title}
               onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && handleAddTask()}
             />
             <select style={styles.input} value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))}>
-              <option value="">选择分类</option>
+              <option value="">{t('taskModal.selectCategory')}</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select style={styles.input} value={form.projectId} onChange={e => setForm(prev => ({ ...prev, projectId: e.target.value }))}>
-              <option value="">不挂项目</option>
+              <option value="">{t('board.noProjectOption')}</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <div style={styles.row}>
               <input style={{ ...styles.input, flex: 1 }} type="date" value={form.dueDate} onChange={e => setForm(prev => ({ ...prev, dueDate: e.target.value }))} />
               <select style={{ ...styles.input, width: 120 }} value={form.priority} onChange={e => setForm(prev => ({ ...prev, priority: e.target.value as PriorityLevel }))}>
-                <option value="low">低</option>
-                <option value="medium">中</option>
-                <option value="high">高</option>
+                <option value="low">{t('common.low')}</option>
+                <option value="medium">{t('common.medium')}</option>
+                <option value="high">{t('common.high')}</option>
               </select>
             </div>
-            <label style={styles.smallLabel}>计划时间(可选，会同步到周视图)</label>
+            <label style={styles.smallLabel}>{t('board.planTimeLabel')}</label>
             <div style={styles.row}>
               <input
                 style={{ ...styles.input, flex: 1 }}
@@ -416,15 +433,15 @@ export default function Board({
                 disabled={!form.startTime}
               />
             </div>
-            <button style={styles.addBtn} onClick={handleAddTask}>+ 添加任务</button>
+            <button style={styles.addBtn} onClick={handleAddTask}>{t('nav.addTask')}</button>
           </section>
 
           <section style={styles.panel}>
             <div style={styles.sectionHeader}>
-              <h3 style={styles.panelTitle}>任务清单</h3>
+              <h3 style={styles.panelTitle}>{t('board.taskListTitle')}</h3>
               <label style={styles.hideDoneLabel}>
                 <input type="checkbox" checked={hideDone} onChange={e => setHideDone(e.target.checked)} />
-                隐藏已完成
+                {t('board.hideDone')}
               </label>
             </div>
             <div style={styles.taskList}>
@@ -437,20 +454,20 @@ export default function Board({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ ...styles.dot, background: cat?.color ?? '#999' }} />
                       <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setEditingTaskId(task.id)}>
-                        <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }} title="点击编辑">{task.title}</div>
+                        <div style={{ ...styles.taskName, ...(task.status === 'done' ? styles.taskNameDone : {}) }} title={t('board.clickToEdit')}>{task.title}</div>
                         <div style={styles.taskMeta}>
-                          {cat?.name ?? '无分类'}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · 截止 ${task.dueDate}` : ''}
+                          {cat?.name ?? t('board.noCategory')}{project ? ` · ${project.name}` : ''}{task.dueDate ? ` · ${t('weeklyView.dueDate', { date: task.dueDate })}` : ''}
                         </div>
                       </div>
-                      <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={priorityLabel(task.priority)} />
+                      <span style={{ ...styles.priorityDot, background: priorityColor(task.priority) }} title={priorityLabel(task.priority, t)} />
                       <button style={{ ...styles.statusPill, ...statusTone(task.status) }} onClick={() => toggleStatus(task)}>
-                        {STATUS_LABEL[task.status]}
+                        {statusLabel(task.status, t)}
                       </button>
-                      <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label="删除任务">x</button>
+                      <button style={styles.deleteBtn} onClick={() => onDeleteProjectTask(task.id)} aria-label={t('board.deleteTaskAria')}>x</button>
                     </div>
                     {overdue && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={styles.overdueTag}>已逾期</span>
+                        <span style={styles.overdueTag}>{t('board.overdueTag')}</span>
                         {postponingTaskId === task.id ? (
                           <input
                             type="date"
@@ -460,35 +477,35 @@ export default function Board({
                             onBlur={() => setPostponingTaskId(null)}
                           />
                         ) : (
-                          <button style={styles.overdueActionBtn} onClick={() => setPostponingTaskId(task.id)}>延后</button>
+                          <button style={styles.overdueActionBtn} onClick={() => setPostponingTaskId(task.id)}>{t('board.postpone')}</button>
                         )}
-                        <button style={styles.overdueActionBtn} onClick={() => handleAbandonTask(task)}>放弃</button>
+                        <button style={styles.overdueActionBtn} onClick={() => handleAbandonTask(task)}>{t('board.abandon')}</button>
                       </div>
                     )}
                   </div>
                 )
               })}
-              {visibleTasks.length === 0 && <p style={styles.emptyText}>暂无任务，从上面添加一个吧。</p>}
+              {visibleTasks.length === 0 && <p style={styles.emptyText}>{t('board.noTasksYet')}</p>}
             </div>
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>习惯</h3>
-            <p style={styles.hint}>这些是周期性打卡的小事(早睡、运动、阅读…)，不会挤进任务清单，只出现在进度网格的"习惯"视图里。</p>
+            <h3 style={styles.panelTitle}>{t('board.habitsTitle')}</h3>
+            <p style={styles.hint}>{t('board.habitsHint')}</p>
             <div style={styles.row}>
               <input
                 style={{ ...styles.input, flex: 1, marginBottom: 0 }}
-                placeholder="习惯名称，比如早睡"
+                placeholder={t('board.habitNamePlaceholder')}
                 value={habitName}
                 onChange={e => setHabitName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddHabit()}
               />
               <select style={{ ...styles.input, width: 110, marginBottom: 0 }} value={habitCategoryId} onChange={e => setHabitCategoryId(e.target.value)}>
-                <option value="">无分类</option>
+                <option value="">{t('board.noCategory')}</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <button style={{ ...styles.addBtn, marginTop: 8 }} onClick={handleAddHabit}>+ 添加习惯</button>
+            <button style={{ ...styles.addBtn, marginTop: 8 }} onClick={handleAddHabit}>{t('board.addHabit')}</button>
             {activeHabits.length > 0 && (
               <div style={{ ...styles.taskList, marginTop: 10 }}>
                 {activeHabits.map(h => {
@@ -503,8 +520,8 @@ export default function Board({
                           <div style={styles.taskName}>{h.name}</div>
                         </div>
                         <span style={styles.habitStatsLabel}>{stats.done}/{stats.total} · {Math.round(stats.pct * 100)}%</span>
-                        <button style={styles.archiveBtn} onClick={() => onArchiveHabit(h.id)}>归档</button>
-                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="永久删除习惯">x</button>
+                        <button style={styles.archiveBtn} onClick={() => onArchiveHabit(h.id)}>{t('board.archive')}</button>
+                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label={t('board.deleteHabitAria')}>x</button>
                       </div>
                       <div style={styles.habitBarTrack}>
                         <div style={{ ...styles.habitBarFill, width: `${Math.round(stats.pct * 100)}%`, background: barColor }} />
@@ -518,7 +535,9 @@ export default function Board({
             {archivedHabits.length > 0 && (
               <div style={{ marginTop: 10 }}>
                 <button style={styles.archivedToggle} onClick={() => setShowArchivedHabits(v => !v)}>
-                  {showArchivedHabits ? '收起' : '展开'}已归档习惯 ({archivedHabits.length})
+                  {showArchivedHabits
+                    ? t('board.collapseArchivedHabits', { count: archivedHabits.length })
+                    : t('board.expandArchivedHabits', { count: archivedHabits.length })}
                 </button>
                 {showArchivedHabits && (
                   <div style={{ ...styles.taskList, marginTop: 8 }}>
@@ -528,8 +547,8 @@ export default function Board({
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ ...styles.taskName, color: 'var(--text-secondary)' }}>{h.name}</div>
                         </div>
-                        <button style={styles.archiveBtn} onClick={() => onUnarchiveHabit(h.id)}>恢复</button>
-                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label="永久删除习惯">x</button>
+                        <button style={styles.archiveBtn} onClick={() => onUnarchiveHabit(h.id)}>{t('board.restore')}</button>
+                        <button style={styles.deleteBtn} onClick={() => onDeleteHabit(h.id)} aria-label={t('board.deleteHabitAria')}>x</button>
                       </div>
                     ))}
                   </div>
@@ -542,25 +561,27 @@ export default function Board({
         <div style={styles.midCol}>
           <section style={styles.panel}>
             <div style={styles.sectionHeader}>
-              <h3 style={styles.panelTitle}>日计划</h3>
+              <h3 style={styles.panelTitle}>{t('board.dailyPlanTitle')}</h3>
               <div style={styles.row}>
-                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, -7))}>&#8249; 上一周</button>
-                <button style={styles.navBtn} onClick={() => setWeekStart(startOfWeek(startOfToday()))}>本周</button>
-                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, 7))}>下一周 &#8250;</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, -7))}>{t('board.prevWeek')}</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(startOfWeek(startOfToday()))}>{t('projects.thisWeek')}</button>
+                <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, 7))}>{t('board.nextWeek')}</button>
               </div>
             </div>
-            <p style={styles.hint}>项目为行、日期为列。拖动行首可调整项目顺序，拖动任务可在同一格内调整顺序。</p>
+            <p style={styles.hint}>{t('board.dailyPlanHint')}</p>
 
             <div style={styles.rowControls}>
-              <label style={styles.rowSortLabel}>行排序</label>
+              <label style={styles.rowSortLabel}>{t('board.rowSortLabel')}</label>
               <select style={styles.rowSortSelect} value={rowSortMode} onChange={e => setRowSortMode(e.target.value as RowSortMode)}>
-                {(Object.keys(ROW_SORT_LABEL) as RowSortMode[]).map(mode => (
-                  <option key={mode} value={mode}>{ROW_SORT_LABEL[mode]}</option>
+                {ROW_SORT_MODES.map(mode => (
+                  <option key={mode} value={mode}>{rowSortLabel(mode, t)}</option>
                 ))}
               </select>
               {(hiddenWithoutTasks.length > 0) && (
                 <button style={styles.archivedToggle} onClick={() => setShowHiddenProjects(v => !v)}>
-                  {showHiddenProjects ? '收起' : '展开'}暂停/已完成项目 ({hiddenWithoutTasks.length})
+                  {showHiddenProjects
+                    ? t('board.collapsePausedProjects', { count: hiddenWithoutTasks.length })
+                    : t('board.expandPausedProjects', { count: hiddenWithoutTasks.length })}
                 </button>
               )}
             </div>
@@ -568,13 +589,13 @@ export default function Board({
             <table style={styles.dayTable}>
               <thead>
                 <tr>
-                  <th style={{ ...styles.dayTh, ...styles.projectHeadCell }}>项目</th>
+                  <th style={{ ...styles.dayTh, ...styles.projectHeadCell }}>{t('board.projectColumn')}</th>
                   {weekDays.map((d, i) => {
                     const ds = formatDate(d)
                     const isToday = ds === todayStr
                     return (
                       <th key={ds} style={{ ...styles.dayTh, ...(isToday ? styles.dayThToday : {}) }}>
-                        周{WEEKDAY_LABEL[i]}{isToday ? ' · 今天' : ''}<br />{d.getMonth() + 1}/{d.getDate()}
+                        {weekdayLabel(i, lang)}{isToday ? ` · ${t('nav.today')}` : ''}<br />{d.getMonth() + 1}/{d.getDate()}
                       </th>
                     )
                   })}
@@ -592,7 +613,7 @@ export default function Board({
                         onDragEnd={() => setDragProjectId(null)}
                         onDragOver={e => dragProjectId && e.preventDefault()}
                         onDrop={() => handleDropOnProjectRow(project.id)}
-                        title="拖动调整项目行顺序"
+                        title={t('board.dragProjectRowTitle')}
                       >
                         <span style={styles.dragHandle}>::</span>{project.name}
                       </td>
@@ -621,11 +642,11 @@ export default function Board({
                                   onDragOver={e => { e.stopPropagation(); dragTaskId && e.preventDefault() }}
                                   onDrop={e => { e.stopPropagation(); handleDropOnCell(project.id, ds, task) }}
                                 >
-                                  <span style={styles.dragHandle} title="拖动排序">::</span>
+                                  <span style={styles.dragHandle} title={t('board.dragTaskTitle')}>::</span>
                                   <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
                                   <span
                                     style={{ ...styles.dayTaskTitle, ...(overdue ? styles.dayTaskOverdue : {}), ...(done ? styles.taskNameDone : {}) }}
-                                    title={`${task.title}（点击编辑）`}
+                                    title={`${task.title}${t('board.clickToEditSuffix')}`}
                                     onClick={() => setEditingTaskId(task.id)}
                                   >
                                     {task.title}
@@ -644,10 +665,10 @@ export default function Board({
                                   if (e.key === 'Escape') cancelQuickAdd()
                                 }}
                                 onBlur={() => submitQuickAdd()}
-                                placeholder="输入后回车"
+                                placeholder={t('board.enterToSubmit')}
                               />
                             ) : (
-                              <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: project.id, ds }); setQuickAddText('') }}>+ 添加</button>
+                              <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: project.id, ds }); setQuickAddText('') }}>{t('board.quickAdd')}</button>
                             )}
                           </td>
                         )
@@ -657,7 +678,7 @@ export default function Board({
                 })}
                 {hasUnassignedWeekTasks && (
                   <tr>
-                    <td style={{ ...styles.projectRowLabel, borderLeft: '3px solid var(--text-muted)' }}>无项目</td>
+                    <td style={{ ...styles.projectRowLabel, borderLeft: '3px solid var(--text-muted)' }}>{t('board.noProjectRow')}</td>
                     {weekDays.map(d => {
                       const ds = formatDate(d)
                       const isToday = ds === todayStr
@@ -683,11 +704,11 @@ export default function Board({
                                 onDragOver={e => { e.stopPropagation(); dragTaskId && e.preventDefault() }}
                                 onDrop={e => { e.stopPropagation(); handleDropOnCell(undefined, ds, task) }}
                               >
-                                <span style={styles.dragHandle} title="拖动排序">::</span>
+                                <span style={styles.dragHandle} title={t('board.dragTaskTitle')}>::</span>
                                 <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
                                 <span
                                   style={{ ...styles.dayTaskTitle, ...(overdue ? styles.dayTaskOverdue : {}), ...(done ? styles.taskNameDone : {}) }}
-                                  title={`${task.title}（点击编辑）`}
+                                  title={`${task.title}${t('board.clickToEditSuffix')}`}
                                   onClick={() => setEditingTaskId(task.id)}
                                 >
                                   {task.title}
@@ -706,10 +727,10 @@ export default function Board({
                                 if (e.key === 'Escape') cancelQuickAdd()
                               }}
                               onBlur={() => submitQuickAdd()}
-                              placeholder="输入后回车"
+                              placeholder={t('board.enterToSubmit')}
                             />
                           ) : (
-                            <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: undefined, ds }); setQuickAddText('') }}>+ 添加</button>
+                            <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: undefined, ds }); setQuickAddText('') }}>{t('board.quickAdd')}</button>
                           )}
                         </td>
                       )
@@ -719,7 +740,7 @@ export default function Board({
               </tbody>
               <tfoot>
                 <tr>
-                  <td style={styles.dayTf}>完成率</td>
+                  <td style={styles.dayTf}>{t('monthPlan.completionRate')}</td>
                   {dayTasksMap.map(({ ds, list }) => {
                     const doneCount = list.filter(t => t.status === 'done').length
                     const total = list.length
@@ -728,7 +749,7 @@ export default function Board({
                       <td
                         key={ds}
                         style={styles.dayTf}
-                        title={total ? `完成率 ${pct}% · 已完成 ${doneCount} · 未完成 ${total - doneCount}` : '这天没有安排任务'}
+                        title={total ? t('board.dayCompletionTitle', { pct, done: doneCount, remaining: total - doneCount }) : t('board.noTasksScheduled')}
                       >
                         {total ? `${pct}% · ${doneCount}/${total - doneCount}` : '-'}
                       </td>
@@ -742,20 +763,20 @@ export default function Board({
 
         <div style={styles.rightCol}>
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>周期时间</h3>
-            <p style={styles.hint}>每个已完成任务从创建到完成的天数。</p>
-            <CycleTimeChart tasks={projectTasks} categories={categories} projects={projects} />
+            <h3 style={styles.panelTitle}>{t('board.cycleTimeTitle')}</h3>
+            <p style={styles.hint}>{t('board.cycleTimeHint')}</p>
+            <CycleTimeChart tasks={projectTasks} categories={categories} projects={projects} emptyText={t('board.noCycleTimeData')} />
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>按分类</h3>
-            <p style={styles.hint}>每一列对应一个分类(见下方图例)，每个点是一个任务。</p>
-            <SwarmChart tasks={projectTasks} categories={categories} projects={projects} />
+            <h3 style={styles.panelTitle}>{t('board.byCategoryTitle')}</h3>
+            <p style={styles.hint}>{t('board.byCategoryHint')}</p>
+            <SwarmChart tasks={projectTasks} categories={categories} projects={projects} noCategoriesText={t('board.noCategoriesData')} noTasksText={t('monthPlan.noTaskData')} />
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>分类图例</h3>
-            <p style={styles.hint}>颜色跟随"设置"里的分类颜色。</p>
+            <h3 style={styles.panelTitle}>{t('board.categoryLegendTitle')}</h3>
+            <p style={styles.hint}>{t('board.categoryLegendHint')}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {categories.map(c => (
                 <div key={c.id} style={styles.legendRow}>
@@ -767,11 +788,11 @@ export default function Board({
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>优先级图例</h3>
+            <h3 style={styles.panelTitle}>{t('board.priorityLegendTitle')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--danger)' }} />高</div>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--warning)' }} />中</div>
-              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--success)' }} />低</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--danger)' }} />{t('common.high')}</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--warning)' }} />{t('common.medium')}</div>
+              <div style={styles.legendRow}><span style={{ ...styles.priorityDot, background: 'var(--success)' }} />{t('common.low')}</div>
             </div>
           </section>
         </div>
@@ -781,38 +802,38 @@ export default function Board({
         <div style={styles.modalBackdrop} onClick={() => setEditingTaskId(null)}>
           <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>编辑任务</h3>
-              <button style={styles.deleteBtn} onClick={() => setEditingTaskId(null)} aria-label="关闭">x</button>
+              <h3 style={styles.modalTitle}>{t('taskModal.editTitle')}</h3>
+              <button style={styles.deleteBtn} onClick={() => setEditingTaskId(null)} aria-label={t('board.closeAria')}>x</button>
             </div>
 
-            <label style={styles.smallLabel}>任务名称</label>
+            <label style={styles.smallLabel}>{t('taskModal.taskName')}</label>
             <input
               style={styles.input}
               value={editingTask.title}
               onChange={e => updateEditingTask({ title: e.target.value })}
             />
 
-            <label style={styles.smallLabel}>分类</label>
+            <label style={styles.smallLabel}>{t('taskModal.category')}</label>
             <select
               style={styles.input}
               value={editingTask.categoryId ?? ''}
               onChange={e => updateEditingTask({ categoryId: e.target.value || undefined })}
             >
-              <option value="">无分类</option>
+              <option value="">{t('board.noCategory')}</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
 
-            <label style={styles.smallLabel}>项目(可选)</label>
+            <label style={styles.smallLabel}>{t('taskModal.projectOptional')}</label>
             <select
               style={styles.input}
               value={editingTask.projectId ?? ''}
               onChange={e => updateEditingTask({ projectId: e.target.value || undefined })}
             >
-              <option value="">不挂项目</option>
+              <option value="">{t('board.noProjectOption')}</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
 
-            <label style={styles.smallLabel}>截止日期 / 优先级</label>
+            <label style={styles.smallLabel}>{t('board.dueDatePriorityLabel')}</label>
             <div style={styles.row}>
               <input
                 style={{ ...styles.input, flex: 1 }}
@@ -829,14 +850,14 @@ export default function Board({
                 value={editingTask.priority ?? ''}
                 onChange={e => updateEditingTask({ priority: (e.target.value || undefined) as PriorityLevel | undefined })}
               >
-                <option value="">无优先级</option>
-                <option value="low">低</option>
-                <option value="medium">中</option>
-                <option value="high">高</option>
+                <option value="">{t('board.noPriority')}</option>
+                <option value="low">{t('common.low')}</option>
+                <option value="medium">{t('common.medium')}</option>
+                <option value="high">{t('common.high')}</option>
               </select>
             </div>
 
-            <label style={styles.smallLabel}>计划时间(可选，会同步到周视图)</label>
+            <label style={styles.smallLabel}>{t('board.planTimeLabel')}</label>
             <div style={styles.row}>
               <input
                 style={{ ...styles.input, flex: 1 }}
@@ -858,13 +879,13 @@ export default function Board({
               style={styles.modalAbandonBtn}
               onClick={() => { onUpdateProjectTask(editingTask.id, { status: 'abandoned' }); setEditingTaskId(null) }}
             >
-              放弃任务
+              {t('board.abandonTask')}
             </button>
             <button
               style={styles.modalDeleteBtn}
               onClick={() => { onDeleteProjectTask(editingTask.id); setEditingTaskId(null) }}
             >
-              删除任务
+              {t('board.deleteTask')}
             </button>
           </div>
         </div>
@@ -873,7 +894,7 @@ export default function Board({
   )
 }
 
-function CycleTimeChart({ tasks, categories, projects }: { tasks: ProjectTask[]; categories: Category[]; projects: Project[] }) {
+function CycleTimeChart({ tasks, categories, projects, emptyText }: { tasks: ProjectTask[]; categories: Category[]; projects: Project[]; emptyText: string }) {
   const ordered = [...tasks].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const points = ordered
     .map((t, i) => ({ task: t, i, cycle: cycleTimeDays(t) }))
@@ -881,7 +902,7 @@ function CycleTimeChart({ tasks, categories, projects }: { tasks: ProjectTask[];
 
   const W = 240, H = 140, pad = 26
   if (points.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无已完成任务数据</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{emptyText}</div>
   }
   const maxCycle = Math.max(3, ...points.map(p => p.cycle))
   const n = ordered.length
@@ -900,13 +921,13 @@ function CycleTimeChart({ tasks, categories, projects }: { tasks: ProjectTask[];
   )
 }
 
-function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; categories: Category[]; projects: Project[] }) {
+function SwarmChart({ tasks, categories, projects, noCategoriesText, noTasksText }: { tasks: ProjectTask[]; categories: Category[]; projects: Project[]; noCategoriesText: string; noTasksText: string }) {
   const W = 240, H = 130
   if (categories.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无分类</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{noCategoriesText}</div>
   }
   if (tasks.length === 0) {
-    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>暂无任务数据</div>
+    return <div style={{ ...styles.chartBox, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{noTasksText}</div>
   }
   const colW = W / categories.length
 
@@ -931,7 +952,7 @@ function SwarmChart({ tasks, categories, projects }: { tasks: ProjectTask[]; cat
   )
 }
 
-function MonthDonut({ pct }: { pct: number }) {
+function MonthDonut({ pct, label }: { pct: number; label: string }) {
   const r = 19
   const c = 2 * Math.PI * r
   const clamped = Math.max(0, Math.min(1, pct))
@@ -948,7 +969,7 @@ function MonthDonut({ pct }: { pct: number }) {
           {Math.round(clamped * 100)}%
         </text>
       </svg>
-      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700 }}>本月习惯</span>
+      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700 }}>{label}</span>
     </div>
   )
 }

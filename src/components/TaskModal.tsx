@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { TaskBlock, Category, Project, TimeQualityLevel } from '../types'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface Props {
   open: boolean
@@ -135,6 +136,7 @@ function TaskModalContent({
   const [type, setType] = useState<'plan' | 'actual'>(initialState.type)
   const [energyLevel, setEnergyLevel] = useState<TimeQualityLevel | ''>(initialState.energyLevel)
   const [valueLevel, setValueLevel] = useState<TimeQualityLevel | ''>(initialState.valueLevel)
+  const { t } = useLanguage()
 
   const handleProjectChange = (nextProjectId: string) => {
     setProjectId(nextProjectId)
@@ -186,33 +188,33 @@ function TaskModalContent({
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
-        <h2 style={styles.title}>{editTask ? '编辑任务' : '添加任务'}</h2>
+        <h2 style={styles.title}>{editTask ? t('taskModal.editTitle') : t('taskModal.addTitle')}</h2>
 
-        <label style={styles.label}>任务名称</label>
+        <label style={styles.label}>{t('taskModal.taskName')}</label>
         <input
           style={styles.input}
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="例如：深度工作"
+          placeholder={t('taskModal.namePlaceholder')}
         />
 
-        <label style={styles.label}>分类</label>
+        <label style={styles.label}>{t('taskModal.category')}</label>
         <select style={styles.input} value={categoryId} onChange={e => handleCategoryChange(e.target.value)}>
-          <option value="">选择分类</option>
+          <option value="">{t('taskModal.selectCategory')}</option>
           {categories.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
 
-        <label style={styles.label}>项目(可选)</label>
+        <label style={styles.label}>{t('taskModal.projectOptional')}</label>
         <select style={styles.input} value={projectId} onChange={e => handleProjectChange(e.target.value)}>
-          <option value="">无</option>
+          <option value="">{t('common.none')}</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
 
-        <label style={styles.label}>日期</label>
+        <label style={styles.label}>{t('taskModal.date')}</label>
         <input
           style={styles.input}
           type="date"
@@ -222,35 +224,35 @@ function TaskModalContent({
 
         <div style={styles.row}>
           <div style={{ flex: 1 }}>
-            <label style={styles.label}>开始</label>
+            <label style={styles.label}>{t('taskModal.start')}</label>
             <input style={styles.input} type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={styles.label}>结束</label>
+            <label style={styles.label}>{t('taskModal.end')}</label>
             <input style={styles.input} type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
           </div>
         </div>
 
-        <label style={styles.label}>类型</label>
+        <label style={styles.label}>{t('taskModal.type')}</label>
         <div style={styles.row}>
           <button
             style={{ ...styles.typeBtn, ...(type === 'plan' ? styles.typeBtnActive : {}) }}
             onClick={() => handleTypeChange('plan')}
-          >计划</button>
+          >{t('taskModal.plan')}</button>
           <button
             style={{ ...styles.typeBtn, ...(type === 'actual' ? styles.typeBtnActive : {}) }}
             onClick={() => handleTypeChange('actual')}
-          >实际</button>
+          >{t('taskModal.actual')}</button>
         </div>
 
         {type === 'actual' && (
           <div style={styles.qualityGrid}>
             <div>
-              <label style={styles.label}>精力</label>
+              <label style={styles.label}>{t('taskModal.energy')}</label>
               <QualitySelector value={energyLevel} onChange={setEnergyLevel} />
             </div>
             <div>
-              <label style={styles.label}>价值</label>
+              <label style={styles.label}>{t('taskModal.value')}</label>
               <QualitySelector value={valueLevel} onChange={setValueLevel} />
             </div>
           </div>
@@ -258,10 +260,10 @@ function TaskModalContent({
 
         <div style={{ ...styles.row, marginTop: 24 }}>
           {editTask && onDelete && (
-            <button style={styles.deleteBtn} onClick={() => { onDelete(editTask.id); onClose() }}>删除</button>
+            <button style={styles.deleteBtn} onClick={() => { onDelete(editTask.id); onClose() }}>{t('common.delete')}</button>
           )}
-          <button style={styles.cancelBtn} onClick={onClose}>取消</button>
-          <button style={styles.saveBtn} onClick={handleSave}>保存</button>
+          <button style={styles.cancelBtn} onClick={onClose}>{t('common.cancel')}</button>
+          <button style={styles.saveBtn} onClick={handleSave}>{t('common.save')}</button>
         </div>
       </div>
     </div>
@@ -275,10 +277,11 @@ function QualitySelector({
   value: TimeQualityLevel | ''
   onChange: (value: TimeQualityLevel | '') => void
 }) {
+  const { t } = useLanguage()
   const levels: { value: TimeQualityLevel; label: string }[] = [
-    { value: 'low', label: '低' },
-    { value: 'medium', label: '中' },
-    { value: 'high', label: '高' },
+    { value: 'low', label: t('common.low') },
+    { value: 'medium', label: t('common.medium') },
+    { value: 'high', label: t('common.high') },
   ]
 
   return (

@@ -2,10 +2,13 @@ import { useState } from 'react'
 import type { Category, Project } from '../types'
 import {
   AI_PROVIDER_PRESETS,
+  getProviderLabel,
+  getProviderNote,
   testAIConnection,
   type AIConfig,
   type AIProvider,
 } from '../services/aiReviewService'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface Props {
   open: boolean
@@ -43,6 +46,7 @@ export default function SettingsModal({
   const [importMessage, setImportMessage] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [testMessage, setTestMessage] = useState('')
+  const { t, lang, setLang } = useLanguage()
 
   const handleExport = () => {
     const json = onExportAllData()
@@ -63,9 +67,9 @@ export default function SettingsModal({
     reader.onload = () => {
       try {
         onImportAllData(String(reader.result))
-        setImportMessage('数据导入成功。')
+        setImportMessage(t('settingsModal.importSuccess'))
       } catch {
-        setImportMessage('导入失败——这个文件不是有效的备份 JSON。')
+        setImportMessage(t('settingsModal.importFail'))
       }
     }
     reader.readAsText(file)
@@ -111,7 +115,7 @@ export default function SettingsModal({
   const handleTestConnection = async () => {
     setTestStatus('testing')
     setTestMessage('')
-    const result = await testAIConnection(aiConfig)
+    const result = await testAIConnection(aiConfig, lang)
     setTestStatus(result.ok ? 'ok' : 'error')
     setTestMessage(result.message)
   }
@@ -120,27 +124,41 @@ export default function SettingsModal({
     <div style={styles.overlay}>
       <div style={styles.modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>设置</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>{t('settingsModal.title')}</h2>
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700 }}>{t('settingsModal.language')}</span>
+          <div style={styles.tabs}>
+            <button
+              style={{ ...styles.tab, ...(lang === 'zh' ? styles.tabActive : {}) }}
+              onClick={() => setLang('zh')}
+            >{t('settingsModal.languageZh')}</button>
+            <button
+              style={{ ...styles.tab, ...(lang === 'en' ? styles.tabActive : {}) }}
+              onClick={() => setLang('en')}
+            >{t('settingsModal.languageEn')}</button>
+          </div>
         </div>
 
         <div style={styles.tabs}>
           <button
             style={{ ...styles.tab, ...(tab === 'categories' ? styles.tabActive : {}) }}
             onClick={() => setTab('categories')}
-          >分类</button>
+          >{t('settingsModal.tabCategories')}</button>
           <button
             style={{ ...styles.tab, ...(tab === 'projects' ? styles.tabActive : {}) }}
             onClick={() => setTab('projects')}
-          >项目</button>
+          >{t('settingsModal.tabProjects')}</button>
           <button
             style={{ ...styles.tab, ...(tab === 'ai' ? styles.tabActive : {}) }}
             onClick={() => setTab('ai')}
-          >AI 回顾</button>
+          >{t('settingsModal.tabAI')}</button>
           <button
             style={{ ...styles.tab, ...(tab === 'backup' ? styles.tabActive : {}) }}
             onClick={() => setTab('backup')}
-          >备份数据</button>
+          >{t('settingsModal.tabBackup')}</button>
         </div>
 
         {tab === 'categories' && (
@@ -148,12 +166,12 @@ export default function SettingsModal({
             <div style={styles.addRow}>
               <input
                 style={{ ...styles.input, flex: 1 }}
-                placeholder="分类名称"
+                placeholder={t('settingsModal.categoryNamePlaceholder')}
                 value={catName}
                 onChange={e => setCatName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddCat()}
               />
-              <button onClick={handleAddCat} style={styles.addBtn}>添加</button>
+              <button onClick={handleAddCat} style={styles.addBtn}>{t('common.add')}</button>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
               {PRESET_COLORS.map(c => (
@@ -188,7 +206,7 @@ export default function SettingsModal({
                   <button onClick={() => onDeleteCategory(cat.id)} style={styles.deleteBtn}>✕</button>
                 </div>
               ))}
-              {categories.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>暂无分类</p>}
+              {categories.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('settingsModal.noCategories')}</p>}
             </div>
           </div>
         )}
@@ -198,7 +216,7 @@ export default function SettingsModal({
             <div style={styles.addRow}>
               <input
                 style={{ ...styles.input, flex: 1 }}
-                placeholder="项目名称"
+                placeholder={t('settingsModal.projectNamePlaceholder')}
                 value={projName}
                 onChange={e => setProjName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddProj()}
@@ -208,12 +226,12 @@ export default function SettingsModal({
                 value={selectedProjCategoryId}
                 onChange={e => setProjCategoryId(e.target.value)}
               >
-                <option value="">分类</option>
+                <option value="">{t('deadlineModal.category')}</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              <button onClick={handleAddProj} style={styles.addBtn}>添加</button>
+              <button onClick={handleAddProj} style={styles.addBtn}>{t('common.add')}</button>
             </div>
             <div style={styles.list}>
               {projectsByCategory.map(({ cat, projects }) => (
@@ -230,7 +248,7 @@ export default function SettingsModal({
                   ))}
                 </div>
               ))}
-              {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>暂无项目</p>}
+              {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('settingsModal.noProjects')}</p>}
             </div>
           </div>
         )}
@@ -238,8 +256,7 @@ export default function SettingsModal({
         {tab === 'ai' && (
           <div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
-              填写 API Key 后，"AI 回顾"会真正调用大模型生成内容；不填的话会继续用内置的模板生成回顾。
-              Key 只保存在这个浏览器本地，不会上传到任何服务器。
+              {t('settingsModal.aiIntro')}
             </p>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -251,7 +268,7 @@ export default function SettingsModal({
                     ...styles.providerChip,
                     ...(aiConfig.provider === key ? styles.providerChipActive : {}),
                   }}
-                >{AI_PROVIDER_PRESETS[key].label}</button>
+                >{getProviderLabel(key, lang)}</button>
               ))}
               <button
                 onClick={() => handleProviderChange('custom')}
@@ -259,19 +276,19 @@ export default function SettingsModal({
                   ...styles.providerChip,
                   ...(aiConfig.provider === 'custom' ? styles.providerChipActive : {}),
                 }}
-              >自定义</button>
+              >{t('settingsModal.aiCustom')}</button>
             </div>
 
             {aiConfig.provider !== 'custom' && (
               <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: -8, marginBottom: 14 }}>
-                {AI_PROVIDER_PRESETS[aiConfig.provider].note}
+                {getProviderNote(aiConfig.provider, lang)}
                 {' '}
                 <a
                   href={AI_PROVIDER_PRESETS[aiConfig.provider].keyUrl}
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: 'var(--primary)' }}
-                >去获取 API Key →</a>
+                >{t('settingsModal.aiGetKey')}</a>
               </p>
             )}
 
@@ -286,7 +303,7 @@ export default function SettingsModal({
                 />
               </label>
               <label style={styles.fieldLabel}>
-                模型名称
+                {t('settingsModal.aiModelName')}
                 <input
                   style={{ ...styles.input, width: '100%', marginTop: 4, boxSizing: 'border-box' }}
                   value={aiConfig.model}
@@ -312,11 +329,11 @@ export default function SettingsModal({
               disabled={testStatus === 'testing'}
               style={{ ...styles.addBtn, marginBottom: 10 }}
             >
-              {testStatus === 'testing' ? '测试中...' : '测试连接'}
+              {testStatus === 'testing' ? t('settingsModal.aiTesting') : t('settingsModal.aiTestConnection')}
             </button>
 
             {testStatus === 'ok' && (
-              <p style={{ color: '#10b981', fontSize: 13 }}>连接成功：{testMessage}</p>
+              <p style={{ color: '#10b981', fontSize: 13 }}>{t('settingsModal.aiConnectSuccess', { msg: testMessage })}</p>
             )}
             {testStatus === 'error' && (
               <p style={{ color: '#ef4444', fontSize: 13 }}>{testMessage}</p>
@@ -327,13 +344,12 @@ export default function SettingsModal({
         {tab === 'backup' && (
           <div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
-              所有数据(分类、项目、任务、时间块、截止日期)都只存在这个浏览器里。
-              换域名或清空浏览器数据前，记得先导出备份。
+              {t('settingsModal.backupIntro')}
             </p>
-            <button onClick={handleExport} style={{ ...styles.addBtn, marginBottom: 12 }}>导出全部数据</button>
+            <button onClick={handleExport} style={{ ...styles.addBtn, marginBottom: 12 }}>{t('settingsModal.exportAll')}</button>
             <div>
               <label style={{ ...styles.addBtn, display: 'inline-block', cursor: 'pointer', background: 'var(--surface-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                导入全部数据
+                {t('settingsModal.importAll')}
                 <input type="file" accept="application/json" onChange={handleImportFile} style={{ display: 'none' }} />
               </label>
             </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TaskBlock, Category } from '../types'
 import { minutesToTime } from '../utils/time'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface Props {
   dateStr: string
@@ -21,13 +22,13 @@ function timeToMin(t: string) {
   return h * 60 + m
 }
 
-function formatDuration(startTime: string, endTime: string) {
+function formatDuration(startTime: string, endTime: string, t: (path: string, vars?: Record<string, string | number>) => string) {
   const minutes = Math.max(0, timeToMin(endTime) - timeToMin(startTime))
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (h === 0) return `${m}分钟`
-  if (m === 0) return `${h}小时`
-  return `${h}小时${m}分钟`
+  if (h === 0) return t('common.durationMinutes', { m })
+  if (m === 0) return t('common.durationHours', { h })
+  return t('common.durationHoursMinutes', { h, m })
 }
 
 const SLOT_MINUTES = 15
@@ -220,6 +221,7 @@ function ActualBlock({ task, categories, onClick }: {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
   const textColor = readableTextColor(color)
+  const { t } = useLanguage()
 
   return (
     <div
@@ -250,7 +252,7 @@ function ActualBlock({ task, categories, onClick }: {
         {task.name}
       </span>
       <span style={{ fontSize: 10, color: hexToRgba(textColor, 0.78) }}>
-        {formatDuration(task.startTime, task.endTime)}
+        {formatDuration(task.startTime, task.endTime, t)}
       </span>
     </div>
   )
@@ -264,6 +266,7 @@ function PlanBlock({ task, categories, onClick, onLogActual }: {
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
+  const { t } = useLanguage()
 
   return (
     <div
@@ -295,13 +298,13 @@ function PlanBlock({ task, categories, onClick, onLogActual }: {
         {task.name}
       </span>
       <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-        {formatDuration(task.startTime, task.endTime)}
+        {formatDuration(task.startTime, task.endTime, t)}
       </span>
       <button
         onPointerDown={e => e.stopPropagation()}
         onClick={e => { e.stopPropagation(); onLogActual(task) }}
-        title="按这个计划记录实际时间"
-        aria-label="记录实际时间"
+        title={t('dayColumn.logActualTitle')}
+        aria-label={t('dayColumn.logActualAria')}
         style={{
           position: 'absolute',
           top: -7,
