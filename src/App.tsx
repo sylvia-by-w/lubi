@@ -151,6 +151,7 @@ export default function App() {
           onAddProjectTask={addProjectTask}
           onUpdateProjectTask={updateProjectTask}
           onDeleteProjectTask={deleteProjectTask}
+          onUpdateProject={updateProject}
           onLogTime={handleLogTime}
           onAddTask={addTask}
           onUpdateTask={updateTask}

@@ -14,6 +14,7 @@ export interface Project {
   deadlineId?: string
   pinnedToHome?: boolean
   homeOrder?: number
+  boardOrder?: number
   createdAt?: string
   updatedAt?: string
 }

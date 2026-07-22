@@ -11,6 +11,7 @@ interface Props {
   onAddProjectTask: (task: Omit<ProjectTask, 'id' | 'createdAt' | 'completedAt'>, options?: { skipCompletedAt?: boolean }) => string
   onUpdateProjectTask: (id: string, updates: Partial<Omit<ProjectTask, 'id' | 'createdAt'>>) => void
   onDeleteProjectTask: (id: string) => void
+  onUpdateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void
   onLogTime: (task: ProjectTask, date: string, existingBlock?: TaskBlock) => void
   onAddTask: (task: Omit<TaskBlock, 'id'>) => void
   onUpdateTask: (id: string, updates: Partial<TaskBlock>) => void
@@ -26,6 +27,8 @@ interface Props {
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
 const STATUS_LABEL: Record<ProjectTaskStatus, string> = { todo: '待办', in_progress: '进行中', done: '已完成' }
 const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日']
+type RowSortMode = 'default' | 'category' | 'priority'
+const ROW_SORT_LABEL: Record<RowSortMode, string> = { default: '项目管理页顺序', category: '按分类', priority: '按最高优先级任务' }
 
 function addDays(d: Date, n: number) {
   const x = new Date(d)
@@ -57,6 +60,9 @@ function taskCategory(task: ProjectTask, categories: Category[], projects: Proje
   if (task.categoryId) return categories.find(c => c.id === task.categoryId)
   const project = task.projectId ? projects.find(p => p.id === task.projectId) : undefined
   return project ? categories.find(c => c.id === project.categoryId) : undefined
+}
+function isActiveProject(p: Project) {
+  return !p.status || p.status === 'active'
 }
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -98,7 +104,7 @@ const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDa
 
 export default function Board({
   projectTasks, categories, projects, habits, habitLogs, tasks,
-  onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask,
+  onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask, onUpdateProject,
   onAddTask, onUpdateTask, onDeleteTask,
   onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit,
 }: Props) {
@@ -108,9 +114,12 @@ export default function Board({
   const [habitName, setHabitName] = useState('')
   const [habitCategoryId, setHabitCategoryId] = useState('')
   const [showArchivedHabits, setShowArchivedHabits] = useState(false)
-  const [quickAddDs, setQuickAddDs] = useState<string | null>(null)
+  const [quickAddCell, setQuickAddCell] = useState<{ projectId: string | undefined; ds: string } | null>(null)
   const [quickAddText, setQuickAddText] = useState('')
   const [dragTaskId, setDragTaskId] = useState<string | null>(null)
+  const [dragProjectId, setDragProjectId] = useState<string | null>(null)
+  const [rowSortMode, setRowSortMode] = useState<RowSortMode>('default')
+  const [showHiddenProjects, setShowHiddenProjects] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -250,19 +259,59 @@ export default function Board({
   }
 
   const dayTasksMap = weekDays.map(d => { const ds = formatDate(d); return { ds, list: tasksForDay(ds) } })
-  const maxSlots = Math.max(4, ...dayTasksMap.map(d => d.list.length + 1))
 
-  const submitQuickAdd = (ds: string) => {
+  const tasksForCell = (projectId: string | undefined, ds: string) =>
+    tasksForDay(ds).filter(t => (projectId ? t.projectId === projectId : !t.projectId))
+
+  const weekDateStrs = weekDays.map(d => formatDate(d))
+  const weekTasksAll = projectTasks.filter(t => t.dueDate && weekDateStrs.includes(t.dueDate))
+  const projectIdsWithWeekTasks = new Set(weekTasksAll.filter(t => t.projectId).map(t => t.projectId as string))
+  const hasUnassignedWeekTasks = weekTasksAll.some(t => !t.projectId)
+
+  const activeProjects = projects.filter(isActiveProject)
+  const hiddenWithTasks = projects.filter(p => !isActiveProject(p) && projectIdsWithWeekTasks.has(p.id))
+  const hiddenWithoutTasks = projects.filter(p => !isActiveProject(p) && !projectIdsWithWeekTasks.has(p.id))
+  const baseRowProjects = [...activeProjects, ...hiddenWithTasks, ...(showHiddenProjects ? hiddenWithoutTasks : [])]
+
+  const bestPriorityWeight = (p: Project) => {
+    const weights = weekTasksAll
+      .filter(t => t.projectId === p.id && t.status !== 'done')
+      .map(t => priorityWeight[t.priority ?? ''] ?? 3)
+    return weights.length ? Math.min(...weights) : 9
+  }
+  const categoryName = (p: Project) => categories.find(c => c.id === p.categoryId)?.name ?? ''
+
+  const rowProjects = [...baseRowProjects].sort((a, b) => {
+    if (a.boardOrder != null && b.boardOrder != null) return a.boardOrder - b.boardOrder
+    if (a.boardOrder != null) return -1
+    if (b.boardOrder != null) return 1
+    if (rowSortMode === 'category') {
+      const cmp = categoryName(a).localeCompare(categoryName(b))
+      return cmp !== 0 ? cmp : a.name.localeCompare(b.name)
+    }
+    if (rowSortMode === 'priority') {
+      const cmp = bestPriorityWeight(a) - bestPriorityWeight(b)
+      return cmp !== 0 ? cmp : a.name.localeCompare(b.name)
+    }
+    return 0
+  })
+
+  const submitQuickAdd = () => {
+    if (!quickAddCell) return
+    const { projectId, ds } = quickAddCell
     const title = quickAddText.trim()
-    if (title) onAddProjectTask({ title, status: 'todo', dueDate: ds })
-    setQuickAddDs(null)
+    if (title) {
+      const project = projectId ? projects.find(p => p.id === projectId) : undefined
+      onAddProjectTask({ title, status: 'todo', dueDate: ds, projectId, categoryId: project?.categoryId })
+    }
+    setQuickAddCell(null)
     setQuickAddText('')
   }
-  const cancelQuickAdd = () => { setQuickAddDs(null); setQuickAddText('') }
+  const cancelQuickAdd = () => { setQuickAddCell(null); setQuickAddText('') }
 
-  const handleDropOnDay = (ds: string, targetTask: ProjectTask | undefined) => {
+  const handleDropOnCell = (projectId: string | undefined, ds: string, targetTask: ProjectTask | undefined) => {
     if (!dragTaskId) return
-    const list = tasksForDay(ds)
+    const list = tasksForCell(projectId, ds)
     const dragIdx = list.findIndex(t => t.id === dragTaskId)
     if (dragIdx === -1) { setDragTaskId(null); return }
     const targetIdx = targetTask ? list.findIndex(t => t.id === targetTask.id) : list.length
@@ -275,6 +324,23 @@ export default function Board({
       if (t.order !== i) onUpdateProjectTask(t.id, { order: i })
     })
     setDragTaskId(null)
+  }
+
+  const handleDropOnProjectRow = (targetProjectId: string | undefined) => {
+    if (!dragProjectId) return
+    const list = rowProjects
+    const dragIdx = list.findIndex(p => p.id === dragProjectId)
+    if (dragIdx === -1) { setDragProjectId(null); return }
+    const targetIdx = targetProjectId ? list.findIndex(p => p.id === targetProjectId) : list.length
+    if (dragIdx === targetIdx || dragIdx === targetIdx - 1) { setDragProjectId(null); return }
+    const insertAt = dragIdx < targetIdx ? targetIdx - 1 : targetIdx
+    const reordered = [...list]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(insertAt, 0, moved)
+    reordered.forEach((p, i) => {
+      if (p.boardOrder !== i) onUpdateProject(p.id, { boardOrder: i })
+    })
+    setDragProjectId(null)
   }
 
   return (
@@ -449,11 +515,26 @@ export default function Board({
                 <button style={styles.navBtn} onClick={() => setWeekStart(addDays(weekStart, 7))}>下一周 &#8250;</button>
               </div>
             </div>
-            <p style={styles.hint}>按截止日期落在每一天的任务，勾选即完成。没有截止日期的任务留在左侧任务清单里。</p>
+            <p style={styles.hint}>项目为行、日期为列。拖动行首可调整项目顺序，拖动任务可在同一格内调整顺序。</p>
+
+            <div style={styles.rowControls}>
+              <label style={styles.rowSortLabel}>行排序</label>
+              <select style={styles.rowSortSelect} value={rowSortMode} onChange={e => setRowSortMode(e.target.value as RowSortMode)}>
+                {(Object.keys(ROW_SORT_LABEL) as RowSortMode[]).map(mode => (
+                  <option key={mode} value={mode}>{ROW_SORT_LABEL[mode]}</option>
+                ))}
+              </select>
+              {(hiddenWithoutTasks.length > 0) && (
+                <button style={styles.archivedToggle} onClick={() => setShowHiddenProjects(v => !v)}>
+                  {showHiddenProjects ? '收起' : '展开'}暂停/已完成项目 ({hiddenWithoutTasks.length})
+                </button>
+              )}
+            </div>
 
             <table style={styles.dayTable}>
               <thead>
                 <tr>
+                  <th style={{ ...styles.dayTh, ...styles.projectHeadCell }}>项目</th>
                   {weekDays.map((d, i) => {
                     const ds = formatDate(d)
                     const isToday = ds === todayStr
@@ -466,66 +547,143 @@ export default function Board({
                 </tr>
               </thead>
               <tbody>
-                {Array.from({ length: maxSlots }).map((_, rowIdx) => (
-                  <tr key={rowIdx}>
-                    {dayTasksMap.map(({ ds, list }) => {
-                      const isToday = ds === todayStr
-                      const task = list[rowIdx]
-                      const isAddSlot = !task && rowIdx === list.length
-                      const project = task?.projectId ? projects.find(p => p.id === task.projectId) : undefined
-                      const done = task?.status === 'done'
-                      return (
-                        <td
-                          key={ds}
-                          style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}
-                          onDragOver={e => dragTaskId && e.preventDefault()}
-                          onDrop={() => handleDropOnDay(ds, task)}
-                        >
-                          {task && (
-                            <div
-                              style={{ ...styles.dayTaskRow, opacity: dragTaskId === task.id ? 0.4 : 1 }}
-                              draggable
-                              onDragStart={() => setDragTaskId(task.id)}
-                              onDragEnd={() => setDragTaskId(null)}
-                            >
-                              <span style={styles.dragHandle} title="拖动排序">::</span>
-                              <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
-                              <span
-                                style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
-                                title={`${task.title}（点击编辑）`}
-                                onClick={() => setEditingTaskId(task.id)}
-                              >
-                                {task.title}
-                              </span>
-                              {project && <span style={styles.projectTag}>{project.name}</span>}
-                            </div>
-                          )}
-                          {!task && isAddSlot && (
-                            quickAddDs === ds ? (
+                {rowProjects.map(project => {
+                  const cat = categories.find(c => c.id === project.categoryId)
+                  return (
+                    <tr key={project.id} style={{ opacity: dragProjectId === project.id ? 0.4 : 1 }}>
+                      <td
+                        style={{ ...styles.projectRowLabel, borderLeft: `3px solid ${cat?.color ?? 'var(--border)'}` }}
+                        draggable
+                        onDragStart={() => setDragProjectId(project.id)}
+                        onDragEnd={() => setDragProjectId(null)}
+                        onDragOver={e => dragProjectId && e.preventDefault()}
+                        onDrop={() => handleDropOnProjectRow(project.id)}
+                        title="拖动调整项目行顺序"
+                      >
+                        <span style={styles.dragHandle}>::</span>{project.name}
+                      </td>
+                      {weekDays.map(d => {
+                        const ds = formatDate(d)
+                        const isToday = ds === todayStr
+                        const cellTasks = tasksForCell(project.id, ds)
+                        const isAdding = quickAddCell?.projectId === project.id && quickAddCell.ds === ds
+                        return (
+                          <td
+                            key={ds}
+                            style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}
+                            onDragOver={e => dragTaskId && e.preventDefault()}
+                            onDrop={() => handleDropOnCell(project.id, ds, undefined)}
+                          >
+                            {cellTasks.map(task => {
+                              const done = task.status === 'done'
+                              return (
+                                <div
+                                  key={task.id}
+                                  style={{ ...styles.dayTaskRow, opacity: dragTaskId === task.id ? 0.4 : 1 }}
+                                  draggable
+                                  onDragStart={() => setDragTaskId(task.id)}
+                                  onDragEnd={() => setDragTaskId(null)}
+                                  onDragOver={e => { e.stopPropagation(); dragTaskId && e.preventDefault() }}
+                                  onDrop={e => { e.stopPropagation(); handleDropOnCell(project.id, ds, task) }}
+                                >
+                                  <span style={styles.dragHandle} title="拖动排序">::</span>
+                                  <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
+                                  <span
+                                    style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
+                                    title={`${task.title}（点击编辑）`}
+                                    onClick={() => setEditingTaskId(task.id)}
+                                  >
+                                    {task.title}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                            {isAdding ? (
                               <input
                                 autoFocus
                                 style={styles.dayQuickInput}
                                 value={quickAddText}
                                 onChange={e => setQuickAddText(e.target.value)}
                                 onKeyDown={e => {
-                                  if (e.key === 'Enter') submitQuickAdd(ds)
+                                  if (e.key === 'Enter') submitQuickAdd()
                                   if (e.key === 'Escape') cancelQuickAdd()
                                 }}
-                                onBlur={() => submitQuickAdd(ds)}
+                                onBlur={() => submitQuickAdd()}
                                 placeholder="输入后回车"
                               />
                             ) : (
-                              <button style={styles.dayAddSlot} onClick={() => { setQuickAddDs(ds); setQuickAddText('') }}>+ 添加</button>
+                              <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: project.id, ds }); setQuickAddText('') }}>+ 添加</button>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+                {hasUnassignedWeekTasks && (
+                  <tr>
+                    <td style={{ ...styles.projectRowLabel, borderLeft: '3px solid var(--text-muted)' }}>无项目</td>
+                    {weekDays.map(d => {
+                      const ds = formatDate(d)
+                      const isToday = ds === todayStr
+                      const cellTasks = tasksForCell(undefined, ds)
+                      const isAdding = quickAddCell?.projectId === undefined && quickAddCell?.ds === ds
+                      return (
+                        <td
+                          key={ds}
+                          style={{ ...styles.dayTd, ...(isToday ? styles.dayTdToday : {}) }}
+                          onDragOver={e => dragTaskId && e.preventDefault()}
+                          onDrop={() => handleDropOnCell(undefined, ds, undefined)}
+                        >
+                          {cellTasks.map(task => {
+                            const done = task.status === 'done'
+                            return (
+                              <div
+                                key={task.id}
+                                style={{ ...styles.dayTaskRow, opacity: dragTaskId === task.id ? 0.4 : 1 }}
+                                draggable
+                                onDragStart={() => setDragTaskId(task.id)}
+                                onDragEnd={() => setDragTaskId(null)}
+                                onDragOver={e => { e.stopPropagation(); dragTaskId && e.preventDefault() }}
+                                onDrop={e => { e.stopPropagation(); handleDropOnCell(undefined, ds, task) }}
+                              >
+                                <span style={styles.dragHandle} title="拖动排序">::</span>
+                                <input type="checkbox" checked={done} onChange={() => toggleDayTaskDone(task)} />
+                                <span
+                                  style={{ ...styles.dayTaskTitle, ...(done ? styles.taskNameDone : {}) }}
+                                  title={`${task.title}（点击编辑）`}
+                                  onClick={() => setEditingTaskId(task.id)}
+                                >
+                                  {task.title}
+                                </span>
+                              </div>
                             )
+                          })}
+                          {isAdding ? (
+                            <input
+                              autoFocus
+                              style={styles.dayQuickInput}
+                              value={quickAddText}
+                              onChange={e => setQuickAddText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') submitQuickAdd()
+                                if (e.key === 'Escape') cancelQuickAdd()
+                              }}
+                              onBlur={() => submitQuickAdd()}
+                              placeholder="输入后回车"
+                            />
+                          ) : (
+                            <button style={styles.dayAddSlot} onClick={() => { setQuickAddCell({ projectId: undefined, ds }); setQuickAddText('') }}>+ 添加</button>
                           )}
                         </td>
                       )
                     })}
                   </tr>
-                ))}
+                )}
               </tbody>
               <tfoot>
                 <tr>
+                  <td style={styles.dayTf}>完成率</td>
                   {dayTasksMap.map(({ ds, list }) => {
                     const doneCount = list.filter(t => t.status === 'done').length
                     const total = list.length
@@ -825,6 +983,11 @@ const styles: Record<string, CSSProperties> = {
   dayQuickInput: { width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', font: 'inherit', fontSize: 11, boxSizing: 'border-box' },
   dayAddSlot: { border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', padding: 0 },
   dayTf: { border: '1px solid var(--border-soft)', background: 'var(--surface-muted)', padding: '5px 4px', fontSize: 10, textAlign: 'center', color: 'var(--text-secondary)' },
+  rowControls: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  rowSortLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 },
+  rowSortSelect: { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '4px 22px 4px 8px', font: 'inherit', fontSize: 11, color: 'var(--text-primary)', background: 'var(--surface)' },
+  projectHeadCell: { textAlign: 'left', paddingLeft: 8, width: 92 },
+  projectRowLabel: { border: '1px solid var(--border-soft)', background: 'var(--surface-soft)', padding: '5px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', cursor: 'grab', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   modalBox: { background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: 16, width: 320, boxShadow: 'var(--shadow-popover)', maxHeight: '80vh', overflow: 'auto', boxSizing: 'border-box' },
   modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
