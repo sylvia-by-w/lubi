@@ -117,3 +117,8 @@ h3 {
 ::selection {
   background: rgba(43, 43, 43, 0.18);
 }
+
+@keyframes lubi-timer-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}

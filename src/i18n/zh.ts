@@ -23,6 +23,16 @@ export const zh = {
     logActualTitle: '按这个计划记录实际时间',
     logActualAria: '记录实际时间',
   },
+  timer: {
+    quickStart: '开始计时',
+    quickStartTitle: '开始一个计时',
+    start: '开始',
+    stop: '停止',
+    discard: '放弃',
+    confirmDiscard: '放弃这次计时且不保存为实际记录?',
+    startFromPlanTitle: '按这个计划开始计时',
+    clickToStop: '点击停止计时',
+  },
   nav: {
     timeLog: '时间日志',
     taskBoard: '任务看板',

@@ -23,6 +23,16 @@ export const en = {
     logActualTitle: 'Log actual time for this plan',
     logActualAria: 'Log actual time',
   },
+  timer: {
+    quickStart: 'Start timer',
+    quickStartTitle: 'Start a timer',
+    start: 'Start',
+    stop: 'Stop',
+    discard: 'Discard',
+    confirmDiscard: 'Discard this timer without saving it as actual time?',
+    startFromPlanTitle: 'Start timer for this plan',
+    clickToStop: 'Click to stop the timer',
+  },
   nav: {
     timeLog: 'Time log',
     taskBoard: 'Task board',

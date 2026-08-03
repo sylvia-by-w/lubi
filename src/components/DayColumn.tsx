@@ -3,6 +3,13 @@ import type { TaskBlock, Category } from '../types'
 import { minutesToTime } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
 
+interface LiveEntry {
+  name: string
+  categoryId: string
+  startTime: string
+  endTime: string
+}
+
 interface Props {
   dateStr: string
   tasks: TaskBlock[]
@@ -15,6 +22,9 @@ interface Props {
   }) => void
   onClickTask: (task: TaskBlock) => void
   onLogActualFromPlan: (task: TaskBlock) => void
+  onStartTimerFromPlan: (task: TaskBlock) => void
+  liveEntry?: LiveEntry | null
+  onStopTimer?: () => void
 }
 
 function timeToMin(t: string) {
@@ -87,7 +97,7 @@ function readableTextColor(hex: string) {
   return brightness > 150 ? '#111827' : '#fff'
 }
 
-export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask, onLogActualFromPlan }: Props) {
+export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask, onLogActualFromPlan, onStartTimerFromPlan, liveEntry, onStopTimer }: Props) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const TOTAL = 24 * 60
 
@@ -151,6 +161,10 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
         <SelectionBlock drag={drag} />
       )}
 
+      {liveEntry && (
+        <LiveRecordingBlock entry={liveEntry} categories={categories} onStop={onStopTimer} />
+      )}
+
       {tasks.map(task => {
         const startMin = timeToMin(task.startTime)
         const endMin = timeToMin(task.endTime)
@@ -182,6 +196,7 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
                 categories={categories}
                 onClick={onClickTask}
                 onLogActual={onLogActualFromPlan}
+                onStartTimer={onStartTimerFromPlan}
               />
             )}
           </div>
@@ -258,11 +273,79 @@ function ActualBlock({ task, categories, onClick }: {
   )
 }
 
-function PlanBlock({ task, categories, onClick, onLogActual }: {
+function LiveRecordingBlock({ entry, categories, onStop }: {
+  entry: LiveEntry
+  categories: Category[]
+  onStop?: () => void
+}) {
+  const cat = categories.find(c => c.id === entry.categoryId)
+  const color = cat?.color ?? '#dc2626'
+  const { t } = useLanguage()
+  const startMin = timeToMin(entry.startTime)
+  const endMin = timeToMin(entry.endTime)
+  const TOTAL = 24 * 60
+  const top = (startMin / TOTAL) * 100
+  const height = (Math.max(endMin - startMin, 1) / TOTAL) * 100
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: `${top}%`,
+        height: `${height}%`,
+        left: 0,
+        width: '70%',
+        zIndex: 5,
+      }}
+    >
+      <div
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onStop?.() }}
+        title={t('timer.clickToStop')}
+        style={{
+          width: '100%',
+          height: '100%',
+          minHeight: 16,
+          background: hexToRgba(color, 0.22),
+          border: `1.5px dashed ${color}`,
+          boxSizing: 'border-box',
+          padding: '3px 6px',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: '#dc2626',
+          flexShrink: 0,
+          animation: 'lubi-timer-pulse 1.4s ease-in-out infinite',
+        }} />
+        <span style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {entry.name}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PlanBlock({ task, categories, onClick, onLogActual, onStartTimer }: {
   task: TaskBlock
   categories: Category[]
   onClick: (task: TaskBlock) => void
   onLogActual: (task: TaskBlock) => void
+  onStartTimer: (task: TaskBlock) => void
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
@@ -300,6 +383,33 @@ function PlanBlock({ task, categories, onClick, onLogActual }: {
       <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
         {formatDuration(task.startTime, task.endTime, t)}
       </span>
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onStartTimer(task) }}
+        title={t('timer.startFromPlanTitle')}
+        aria-label={t('timer.startFromPlanTitle')}
+        style={{
+          position: 'absolute',
+          top: -7,
+          right: 10,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          border: '1.5px solid #dc2626',
+          background: '#fff',
+          color: '#dc2626',
+          fontSize: 8,
+          lineHeight: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          padding: 0,
+          zIndex: 4,
+        }}
+      >
+        &#9654;
+      </button>
       <button
         onPointerDown={e => e.stopPropagation()}
         onClick={e => { e.stopPropagation(); onLogActual(task) }}

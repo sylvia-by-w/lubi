@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import type { AIReview, Deadline, ProjectTask, TaskBlock, Category, Project } from '../types'
-import { getWeekDays, formatDate, formatDayLabel, timeToMinutes } from '../utils/time'
+import type { ActiveTimer, AIReview, Deadline, ProjectTask, TaskBlock, Category, Project } from '../types'
+import { getWeekDays, formatDate, formatDayLabel, minutesToTime, timeToMinutes } from '../utils/time'
+import { useTicker } from '../hooks/useTicker'
 import {
   generateDailyReview,
   generateWeeklyReview,
@@ -34,6 +35,9 @@ interface Props {
   }) => void
   onClickTask: (task: TaskBlock) => void
   onLogActualFromPlan: (task: TaskBlock) => void
+  onStartTimerFromPlan: (task: TaskBlock) => void
+  activeTimer: ActiveTimer | null
+  onStopTimer: () => void
 }
 
 interface LegacyDailyReview {
@@ -299,8 +303,12 @@ export default function WeeklyView({
   onCreateSelection,
   onClickTask,
   onLogActualFromPlan,
+  onStartTimerFromPlan,
+  activeTimer,
+  onStopTimer,
 }: Props) {
   const { t, lang } = useLanguage()
+  useTicker(!!activeTimer, 30000)
   const scrollRef = useRef<HTMLDivElement>(null)
   const days = useMemo(() => getWeekDays(weekStart), [weekStart])
   const weekKey = formatDate(weekStart)
@@ -326,6 +334,22 @@ export default function WeeklyView({
     return tasks.filter(t => weekDates.has(t.date))
   }, [days, tasks])
   const selectedDateTasks = tasks.filter(t => t.date === selectedDate)
+
+  const liveEntry = (() => {
+    if (!activeTimer) return null
+    const start = new Date(activeTimer.startedAt)
+    const now = new Date()
+    const startMinutes = start.getHours() * 60 + start.getMinutes()
+    const crossedMidnight = now.toDateString() !== start.toDateString()
+    const rawEndMinutes = crossedMidnight ? 24 * 60 - 1 : now.getHours() * 60 + now.getMinutes()
+    const endMinutes = Math.min(Math.max(rawEndMinutes, startMinutes + 1), 24 * 60 - 1)
+    return {
+      name: activeTimer.name,
+      categoryId: activeTimer.categoryId,
+      startTime: minutesToTime(startMinutes),
+      endTime: minutesToTime(endMinutes),
+    }
+  })()
 
   const projectStats = projects
     .map(project => {
@@ -613,6 +637,9 @@ export default function WeeklyView({
                   onCreateSelection={handleCreateSelection}
                   onClickTask={onClickTask}
                   onLogActualFromPlan={onLogActualFromPlan}
+                  onStartTimerFromPlan={onStartTimerFromPlan}
+                  liveEntry={activeTimer?.date === dateStr ? liveEntry : null}
+                  onStopTimer={onStopTimer}
                 />
               )
             })}

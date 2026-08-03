@@ -1,6 +1,7 @@
-import type { Deadline, PriorityLevel, Project } from '../types'
+import type { ActiveTimer, Deadline, PriorityLevel, Project } from '../types'
 import { getWeekDays } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
+import { useTicker } from '../hooks/useTicker'
 
 interface Props {
   weekStart: Date
@@ -14,6 +15,20 @@ interface Props {
   projects: Project[]
   currentPage: 'weekly' | 'board' | 'month' | 'projects' | 'statistics'
   onChangePage: (page: 'weekly' | 'board' | 'month' | 'projects' | 'statistics') => void
+  activeTimer: ActiveTimer | null
+  onOpenQuickStartTimer: () => void
+  onStopTimer: () => void
+  onDiscardTimer: () => void
+}
+
+function formatElapsed(startedAt: string) {
+  const elapsedMs = Math.max(0, Date.now() - new Date(startedAt).getTime())
+  const totalSeconds = Math.floor(elapsedMs / 1000)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
 function todayStr() {
@@ -52,8 +67,13 @@ export default function NavBar({
   deadlines,
   currentPage,
   onChangePage,
+  activeTimer,
+  onOpenQuickStartTimer,
+  onStopTimer,
+  onDiscardTimer,
 }: Props) {
   const { t, lang } = useLanguage()
+  useTicker(!!activeTimer, 1000)
   const days = getWeekDays(weekStart)
   const locale = lang === 'en' ? 'en-US' : 'zh-CN'
   const startLabel = days[0].toLocaleDateString(locale, { month: 'short', day: 'numeric' })
@@ -90,6 +110,29 @@ export default function NavBar({
           onClick={() => onChangePage('statistics')}
         >{t('nav.statistics')}</button>
       </div>
+
+      {activeTimer ? (
+        <div style={styles.timerPill} title={activeTimer.name}>
+          <span style={styles.timerDot} />
+          <span style={styles.timerName}>{activeTimer.name}</span>
+          <span style={styles.timerElapsed}>{formatElapsed(activeTimer.startedAt)}</span>
+          <button style={styles.timerStopBtn} onClick={onStopTimer} title={t('timer.stop')}>
+            {t('timer.stop')}
+          </button>
+          <button
+            style={styles.timerDiscardBtn}
+            onClick={() => { if (confirm(t('timer.confirmDiscard'))) onDiscardTimer() }}
+            title={t('timer.discard')}
+            aria-label={t('timer.discard')}
+          >
+            &#10005;
+          </button>
+        </div>
+      ) : (
+        <button style={styles.quickStartBtn} onClick={onOpenQuickStartTimer}>
+          &#9654; {t('timer.quickStart')}
+        </button>
+      )}
 
       <div style={styles.right}>
         {visibleDeadlines.length === 0 ? (
@@ -165,6 +208,80 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#fff',
     color: '#181818',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+  },
+  quickStartBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '8px 14px',
+    borderRadius: 999,
+    border: '1px solid rgba(220, 38, 38, 0.4)',
+    background: 'rgba(220, 38, 38, 0.12)',
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  timerPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 8px 6px 12px',
+    borderRadius: 999,
+    border: '1px solid rgba(220, 38, 38, 0.45)',
+    background: 'rgba(220, 38, 38, 0.14)',
+    flexShrink: 0,
+    maxWidth: 280,
+  },
+  timerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: '#dc2626',
+    flexShrink: 0,
+    animation: 'lubi-timer-pulse 1.4s ease-in-out infinite',
+  },
+  timerName: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#fff',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 110,
+  },
+  timerElapsed: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: '#fca5a5',
+    fontVariantNumeric: 'tabular-nums',
+    flexShrink: 0,
+  },
+  timerStopBtn: {
+    padding: '5px 10px',
+    borderRadius: 999,
+    border: 'none',
+    background: '#dc2626',
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  timerDiscardBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    border: 'none',
+    background: 'transparent',
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 10,
+    cursor: 'pointer',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   right: {
     marginLeft: 'auto',

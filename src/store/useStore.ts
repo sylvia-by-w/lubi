@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import type { Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
+import type { ActiveTimer, Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
 import { DEFAULT_AI_CONFIG, type AIConfig } from '../services/aiReviewService'
+import { minutesToTime } from '../utils/time'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -12,6 +13,15 @@ const KEYS = {
   habitLogs: 'lyubishchev_habit_logs',
   monthlyNotes: 'lyubishchev_monthly_notes',
   aiConfig: 'lyubishchev_ai_config',
+  activeTimer: 'lyubishchev_active_timer',
+}
+
+function todayDateStr() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -71,6 +81,9 @@ export function useStore() {
   const [aiConfig, setAiConfig] = useState<AIConfig>(() =>
     load(KEYS.aiConfig, DEFAULT_AI_CONFIG)
   )
+  const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(() =>
+    load<ActiveTimer | null>(KEYS.activeTimer, null)
+  )
 
   useEffect(() => save(KEYS.categories, categories), [categories])
   useEffect(() => save(KEYS.projects, projects), [projects])
@@ -81,6 +94,7 @@ export function useStore() {
   useEffect(() => save(KEYS.habitLogs, habitLogs), [habitLogs])
   useEffect(() => save(KEYS.monthlyNotes, monthlyNotes), [monthlyNotes])
   useEffect(() => save(KEYS.aiConfig, aiConfig), [aiConfig])
+  useEffect(() => save(KEYS.activeTimer, activeTimer), [activeTimer])
 
   const addCategory = (cat: Omit<Category, 'id'>) => {
     const newCat = { ...cat, id: crypto.randomUUID() }
@@ -149,6 +163,55 @@ export function useStore() {
 
   const deleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id))
+  }
+
+  const finishActiveTimer = (timer: ActiveTimer) => {
+    const start = new Date(timer.startedAt)
+    const now = new Date()
+    const startMinutes = start.getHours() * 60 + start.getMinutes()
+    const crossedMidnight = now.toDateString() !== start.toDateString()
+    const rawEndMinutes = crossedMidnight
+      ? 24 * 60 - 1
+      : now.getHours() * 60 + now.getMinutes()
+    const endMinutes = Math.max(rawEndMinutes, startMinutes + 1)
+
+    addTask({
+      name: timer.name,
+      categoryId: timer.categoryId,
+      projectId: timer.projectId,
+      projectTaskId: timer.projectTaskId,
+      date: timer.date,
+      startTime: minutesToTime(startMinutes),
+      endTime: minutesToTime(Math.min(endMinutes, 24 * 60 - 1)),
+      type: 'actual',
+    })
+  }
+
+  const startTimer = (params: { name: string; categoryId: string; projectId?: string; projectTaskId?: string; sourcePlanTaskId?: string }) => {
+    setActiveTimer(prev => {
+      if (prev) finishActiveTimer(prev)
+      return {
+        id: crypto.randomUUID(),
+        name: params.name,
+        categoryId: params.categoryId,
+        projectId: params.projectId,
+        projectTaskId: params.projectTaskId,
+        sourcePlanTaskId: params.sourcePlanTaskId,
+        date: todayDateStr(),
+        startedAt: new Date().toISOString(),
+      }
+    })
+  }
+
+  const stopTimer = () => {
+    setActiveTimer(prev => {
+      if (prev) finishActiveTimer(prev)
+      return null
+    })
+  }
+
+  const discardTimer = () => {
+    setActiveTimer(null)
   }
 
   const addDeadline = (deadline: Omit<Deadline, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -224,7 +287,7 @@ export function useStore() {
   }
 
   return {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
@@ -233,6 +296,7 @@ export function useStore() {
     addHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog,
     upsertMonthlyNote,
     updateAIConfig,
+    startTimer, stopTimer, discardTimer,
     exportAllData, importAllData,
   }
 }

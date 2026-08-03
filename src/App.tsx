@@ -9,6 +9,7 @@ import Projects from './pages/Projects'
 import Statistics from './pages/Statistics'
 import SettingsModal from './components/SettingsModal'
 import DeadlineModal from './components/DeadlineModal'
+import TimerStartModal from './components/TimerStartModal'
 import type { ProjectTask, TaskBlock } from './types'
 import { exportWeeklyExcel } from './utils/excelExport'
 
@@ -34,7 +35,7 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
     addTask, updateTask, deleteTask,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
@@ -42,6 +43,7 @@ export default function App() {
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote,
     updateAIConfig,
+    startTimer, stopTimer, discardTimer,
     exportAllData, importAllData
   } = useStore()
 
@@ -52,6 +54,7 @@ export default function App() {
   const [editTask, setEditTask] = useState<TaskBlock | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [deadlinesOpen, setDeadlinesOpen] = useState(false)
+  const [quickTimerOpen, setQuickTimerOpen] = useState(false)
 
   const handlePrevWeek = () => {
     const d = new Date(weekStart)
@@ -111,6 +114,16 @@ export default function App() {
     setModalOpen(true)
   }
 
+  const handleStartTimerFromPlan = (planTask: TaskBlock) => {
+    startTimer({
+      name: planTask.name,
+      categoryId: planTask.categoryId,
+      projectId: planTask.projectId,
+      projectTaskId: planTask.projectTaskId,
+      sourcePlanTaskId: planTask.id,
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <NavBar
@@ -125,6 +138,10 @@ export default function App() {
         currentPage={page}
         onChangePage={setPage}
         onOpenSettings={() => setSettingsOpen(true)}
+        activeTimer={activeTimer}
+        onOpenQuickStartTimer={() => setQuickTimerOpen(true)}
+        onStopTimer={stopTimer}
+        onDiscardTimer={discardTimer}
       />
 
       {page === 'weekly' ? (
@@ -139,6 +156,9 @@ export default function App() {
           onCreateSelection={handleCreateSelection}
           onClickTask={handleClickTask}
           onLogActualFromPlan={handleLogActualFromPlan}
+          onStartTimerFromPlan={handleStartTimerFromPlan}
+          activeTimer={activeTimer}
+          onStopTimer={stopTimer}
         />
       ) : page === 'board' ? (
         <Board
@@ -221,6 +241,14 @@ export default function App() {
         onImportAllData={importAllData}
         aiConfig={aiConfig}
         onUpdateAIConfig={updateAIConfig}
+      />
+
+      <TimerStartModal
+        open={quickTimerOpen}
+        onClose={() => setQuickTimerOpen(false)}
+        onStart={params => startTimer(params)}
+        categories={categories}
+        projects={projects}
       />
 
       <DeadlineModal

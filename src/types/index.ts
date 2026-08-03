@@ -82,6 +82,17 @@ export interface TaskBlock {
   valueLevel?: TimeQualityLevel
 }
 
+export interface ActiveTimer {
+  id: string
+  name: string
+  categoryId: string
+  projectId?: string
+  projectTaskId?: string
+  date: string
+  startedAt: string
+  sourcePlanTaskId?: string
+}
+
 export interface HabitItem {
   id: string
   name: string
@@ -121,4 +132,5 @@ export interface AppState {
   habits: HabitItem[]
   habitLogs: HabitLog[]
   monthlyNotes: MonthlyNote[]
+  activeTimer: ActiveTimer | null
 }
