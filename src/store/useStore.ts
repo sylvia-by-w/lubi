@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { ActiveTimer, Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
 import { DEFAULT_AI_CONFIG, type AIConfig } from '../services/aiReviewService'
-import { minutesToTime } from '../utils/time'
+import { minutesToTime, subtractTimeRanges, timeToMinutes } from '../utils/time'
+import { useLanguage } from '../i18n/LanguageContext'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -47,6 +48,7 @@ function normalizeProjectTask(task: ProjectTask): ProjectTask {
 }
 
 export function useStore() {
+  const { t } = useLanguage()
   const [categories, setCategories] = useState<Category[]>(() =>
     load(KEYS.categories, [
       { id: '1', name: 'University', color: '#9DC3E6' },
@@ -165,7 +167,13 @@ export function useStore() {
     setTasks(prev => prev.filter(t => t.id !== id))
   }
 
-  const finishActiveTimer = (timer: ActiveTimer) => {
+  /**
+   * Saves the timer as one or more 'actual' blocks, trimming away any part of
+   * its span that already overlaps an existing actual record for that date
+   * (e.g. a manually logged block, or a previous timer). Returns false if the
+   * entire span was absorbed by existing records and nothing new was saved.
+   */
+  const finishActiveTimer = (timer: ActiveTimer): boolean => {
     const start = new Date(timer.startedAt)
     const now = new Date()
     const startMinutes = start.getHours() * 60 + start.getMinutes()
@@ -173,18 +181,29 @@ export function useStore() {
     const rawEndMinutes = crossedMidnight
       ? 24 * 60 - 1
       : now.getHours() * 60 + now.getMinutes()
-    const endMinutes = Math.max(rawEndMinutes, startMinutes + 1)
+    const endMinutes = Math.min(Math.max(rawEndMinutes, startMinutes + 1), 24 * 60 - 1)
 
-    addTask({
-      name: timer.name,
-      categoryId: timer.categoryId,
-      projectId: timer.projectId,
-      projectTaskId: timer.projectTaskId,
-      date: timer.date,
-      startTime: minutesToTime(startMinutes),
-      endTime: minutesToTime(Math.min(endMinutes, 24 * 60 - 1)),
-      type: 'actual',
+    const blockers = tasks
+      .filter(existing => existing.type === 'actual' && existing.date === timer.date)
+      .map(existing => ({ start: timeToMinutes(existing.startTime), end: timeToMinutes(existing.endTime) }))
+
+    const segments = subtractTimeRanges({ start: startMinutes, end: endMinutes }, blockers)
+      .filter(seg => seg.end - seg.start >= 1)
+
+    segments.forEach(seg => {
+      addTask({
+        name: timer.name,
+        categoryId: timer.categoryId,
+        projectId: timer.projectId,
+        projectTaskId: timer.projectTaskId,
+        date: timer.date,
+        startTime: minutesToTime(seg.start),
+        endTime: minutesToTime(seg.end),
+        type: 'actual',
+      })
     })
+
+    return segments.length > 0
   }
 
   const startTimer = (params: { name: string; categoryId: string; projectId?: string; projectTaskId?: string; sourcePlanTaskId?: string }) => {
@@ -202,7 +221,10 @@ export function useStore() {
   }
 
   const stopTimer = () => {
-    if (activeTimer) finishActiveTimer(activeTimer)
+    if (activeTimer) {
+      const saved = finishActiveTimer(activeTimer)
+      if (!saved) alert(t('timer.fullyOverlappedAlert'))
+    }
     setActiveTimer(null)
   }
 

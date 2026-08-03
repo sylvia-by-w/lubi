@@ -32,6 +32,7 @@ export const zh = {
     confirmDiscard: '放弃这次计时且不保存为实际记录?',
     startFromPlanTitle: '按这个计划开始计时',
     clickToStop: '点击停止计时',
+    fullyOverlappedAlert: '这段计时的时间和已有的实际记录完全重叠,没有新记录被保存。',
   },
   nav: {
     timeLog: '时间日志',

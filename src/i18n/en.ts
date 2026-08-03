@@ -32,6 +32,7 @@ export const en = {
     confirmDiscard: 'Discard this timer without saving it as actual time?',
     startFromPlanTitle: 'Start timer for this plan',
     clickToStop: 'Click to stop the timer',
+    fullyOverlappedAlert: 'This entire timed span already overlapped an existing actual record, so nothing new was saved.',
   },
   nav: {
     timeLog: 'Time log',
