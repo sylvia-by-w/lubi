@@ -188,26 +188,22 @@ export function useStore() {
   }
 
   const startTimer = (params: { name: string; categoryId: string; projectId?: string; projectTaskId?: string; sourcePlanTaskId?: string }) => {
-    setActiveTimer(prev => {
-      if (prev) finishActiveTimer(prev)
-      return {
-        id: crypto.randomUUID(),
-        name: params.name,
-        categoryId: params.categoryId,
-        projectId: params.projectId,
-        projectTaskId: params.projectTaskId,
-        sourcePlanTaskId: params.sourcePlanTaskId,
-        date: todayDateStr(),
-        startedAt: new Date().toISOString(),
-      }
+    if (activeTimer) finishActiveTimer(activeTimer)
+    setActiveTimer({
+      id: crypto.randomUUID(),
+      name: params.name,
+      categoryId: params.categoryId,
+      projectId: params.projectId,
+      projectTaskId: params.projectTaskId,
+      sourcePlanTaskId: params.sourcePlanTaskId,
+      date: todayDateStr(),
+      startedAt: new Date().toISOString(),
     })
   }
 
   const stopTimer = () => {
-    setActiveTimer(prev => {
-      if (prev) finishActiveTimer(prev)
-      return null
-    })
+    if (activeTimer) finishActiveTimer(activeTimer)
+    setActiveTimer(null)
   }
 
   const discardTimer = () => {
