@@ -55,3 +55,46 @@ export function formatDayLabel(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
   return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })
 }
+
+export function parseDateStr(dateStr: string): Date {
+  return new Date(dateStr + 'T00:00:00')
+}
+
+export function addDaysToDateStr(dateStr: string, days: number): string {
+  const d = parseDateStr(dateStr)
+  d.setDate(d.getDate() + days)
+  return formatDate(d)
+}
+
+/** 0 = Sunday ... 6 = Saturday, matching Date#getDay() */
+export function weekdayOfDateStr(dateStr: string): number {
+  return parseDateStr(dateStr).getDay()
+}
+
+/**
+ * Expands a recurrence rule into a list of concrete date strings (inclusive
+ * of both `startDate` and `untilDate`). For 'weekly', only dates whose
+ * weekday is in `weekdays` (Date#getDay() convention) are included — pass
+ * the start date's own weekday to keep at least that day.
+ * Capped at `maxCount` results as a safety net against runaway ranges.
+ */
+export function expandRecurrenceDates(
+  startDate: string,
+  untilDate: string,
+  freq: 'daily' | 'weekly',
+  weekdays: number[],
+  maxCount = 200
+): string[] {
+  if (untilDate < startDate) return []
+  const dates: string[] = []
+  let cursor = startDate
+  let guard = 0
+  while (cursor <= untilDate && dates.length < maxCount && guard < 3660) {
+    guard++
+    if (freq === 'daily' || weekdays.includes(weekdayOfDateStr(cursor))) {
+      dates.push(cursor)
+    }
+    cursor = addDaysToDateStr(cursor, 1)
+  }
+  return dates
+}

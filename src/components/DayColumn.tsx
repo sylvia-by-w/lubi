@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { TaskBlock, Category } from '../types'
 import { minutesToTime } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
@@ -8,6 +8,15 @@ interface LiveEntry {
   categoryId: string
   startTime: string
   endTime: string
+}
+
+export interface DragPreview {
+  startMin: number
+  endMin: number
+  type: 'plan' | 'actual'
+  mode: 'move' | 'copy'
+  name: string
+  categoryId: string
 }
 
 interface Props {
@@ -20,11 +29,17 @@ interface Props {
     startTime: string
     endTime: string
   }) => void
-  onClickTask: (task: TaskBlock) => void
   onLogActualFromPlan: (task: TaskBlock) => void
   onStartTimerFromPlan: (task: TaskBlock) => void
   liveEntry?: LiveEntry | null
   onStopTimer?: () => void
+  onBlockPointerDown: (task: TaskBlock, e: ReactPointerEvent<HTMLDivElement>) => void
+  onBlockPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onBlockPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onBlockPointerCancel: (e: ReactPointerEvent<HTMLDivElement>) => void
+  hiddenTaskId?: string | null
+  dragPreview?: DragPreview | null
+  registerRef?: (el: HTMLDivElement | null) => void
 }
 
 function timeToMin(t: string) {
@@ -97,7 +112,23 @@ function readableTextColor(hex: string) {
   return brightness > 150 ? '#111827' : '#fff'
 }
 
-export default function DayColumn({ dateStr, tasks, categories, onCreateSelection, onClickTask, onLogActualFromPlan, onStartTimerFromPlan, liveEntry, onStopTimer }: Props) {
+export default function DayColumn({
+  dateStr,
+  tasks,
+  categories,
+  onCreateSelection,
+  onLogActualFromPlan,
+  onStartTimerFromPlan,
+  liveEntry,
+  onStopTimer,
+  onBlockPointerDown,
+  onBlockPointerMove,
+  onBlockPointerUp,
+  onBlockPointerCancel,
+  hiddenTaskId,
+  dragPreview,
+  registerRef,
+}: Props) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const TOTAL = 24 * 60
 
@@ -118,6 +149,7 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
 
   return (
     <div
+      ref={registerRef}
       style={{ position: 'relative', flex: 1, borderLeft: '1px solid var(--border)', cursor: 'crosshair' }}
       onPointerDown={e => {
         if (e.button !== 0) return
@@ -171,6 +203,7 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
         const top = (startMin / TOTAL) * 100
         const height = ((endMin - startMin) / TOTAL) * 100
         const isActual = task.type === 'actual'
+        const isDragOrigin = task.id === hiddenTaskId
 
         return (
           <div
@@ -182,26 +215,37 @@ export default function DayColumn({ dateStr, tasks, categories, onCreateSelectio
               left: isActual ? 0 : '70%',
               width: isActual ? '70%' : '30%',
               zIndex: 2,
+              opacity: isDragOrigin ? 0.3 : 1,
             }}
           >
             {isActual ? (
               <ActualBlock
                 task={task}
                 categories={categories}
-                onClick={onClickTask}
+                onPointerDown={onBlockPointerDown}
+                onPointerMove={onBlockPointerMove}
+                onPointerUp={onBlockPointerUp}
+                onPointerCancel={onBlockPointerCancel}
               />
             ) : (
               <PlanBlock
                 task={task}
                 categories={categories}
-                onClick={onClickTask}
                 onLogActual={onLogActualFromPlan}
                 onStartTimer={onStartTimerFromPlan}
+                onPointerDown={onBlockPointerDown}
+                onPointerMove={onBlockPointerMove}
+                onPointerUp={onBlockPointerUp}
+                onPointerCancel={onBlockPointerCancel}
               />
             )}
           </div>
         )
       })}
+
+      {dragPreview && (
+        <DragPreviewBlock preview={dragPreview} categories={categories} />
+      )}
     </div>
   )
 }
@@ -228,10 +272,13 @@ function SelectionBlock({ drag }: { drag: DragState }) {
   )
 }
 
-function ActualBlock({ task, categories, onClick }: {
+function ActualBlock({ task, categories, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
   task: TaskBlock
   categories: Category[]
-  onClick: (task: TaskBlock) => void
+  onPointerDown: (task: TaskBlock, e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerCancel: (e: ReactPointerEvent<HTMLDivElement>) => void
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
@@ -240,8 +287,11 @@ function ActualBlock({ task, categories, onClick }: {
 
   return (
     <div
-      onPointerDown={e => e.stopPropagation()}
-      onClick={e => { e.stopPropagation(); onClick(task) }}
+      onPointerDown={e => { e.stopPropagation(); onPointerDown(task, e) }}
+      onPointerMove={e => { e.stopPropagation(); onPointerMove(e) }}
+      onPointerUp={e => { e.stopPropagation(); onPointerUp(e) }}
+      onPointerCancel={e => { e.stopPropagation(); onPointerCancel(e) }}
+      title={t('dayColumn.dragHint')}
       style={{
         width: '100%',
         height: '100%',
@@ -253,6 +303,8 @@ function ActualBlock({ task, categories, onClick }: {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-start',
+        cursor: 'grab',
+        touchAction: 'none',
       }}
     >
       <span style={{
@@ -340,12 +392,15 @@ function LiveRecordingBlock({ entry, categories, onStop }: {
   )
 }
 
-function PlanBlock({ task, categories, onClick, onLogActual, onStartTimer }: {
+function PlanBlock({ task, categories, onLogActual, onStartTimer, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
   task: TaskBlock
   categories: Category[]
-  onClick: (task: TaskBlock) => void
   onLogActual: (task: TaskBlock) => void
   onStartTimer: (task: TaskBlock) => void
+  onPointerDown: (task: TaskBlock, e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onPointerCancel: (e: ReactPointerEvent<HTMLDivElement>) => void
 }) {
   const cat = categories.find(c => c.id === task.categoryId)
   const color = cat?.color ?? '#6366f1'
@@ -353,8 +408,11 @@ function PlanBlock({ task, categories, onClick, onLogActual, onStartTimer }: {
 
   return (
     <div
-      onPointerDown={e => e.stopPropagation()}
-      onClick={e => { e.stopPropagation(); onClick(task) }}
+      onPointerDown={e => { e.stopPropagation(); onPointerDown(task, e) }}
+      onPointerMove={e => { e.stopPropagation(); onPointerMove(e) }}
+      onPointerUp={e => { e.stopPropagation(); onPointerUp(e) }}
+      onPointerCancel={e => { e.stopPropagation(); onPointerCancel(e) }}
+      title={t('dayColumn.dragHint')}
       style={{
         position: 'relative',
         width: '100%',
@@ -367,6 +425,8 @@ function PlanBlock({ task, categories, onClick, onLogActual, onStartTimer }: {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-start',
+        cursor: 'grab',
+        touchAction: 'none',
       }}
     >
       <span style={{
@@ -437,6 +497,63 @@ function PlanBlock({ task, categories, onClick, onLogActual, onStartTimer }: {
       >
         &#10003;
       </button>
+    </div>
+  )
+}
+
+function DragPreviewBlock({ preview, categories }: { preview: DragPreview; categories: Category[] }) {
+  const cat = categories.find(c => c.id === preview.categoryId)
+  const color = cat?.color ?? '#6366f1'
+  const TOTAL = 24 * 60
+  const top = (preview.startMin / TOTAL) * 100
+  const height = (Math.max(preview.endMin - preview.startMin, 1) / TOTAL) * 100
+  const isActual = preview.type === 'actual'
+  const accent = preview.mode === 'copy' ? '#2563eb' : color
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: `${top}%`,
+        height: `${height}%`,
+        left: isActual ? 0 : '70%',
+        width: isActual ? '70%' : '30%',
+        zIndex: 6,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          minHeight: 14,
+          background: hexToRgba(accent, 0.22),
+          border: `1.5px dashed ${accent}`,
+          boxSizing: 'border-box',
+          padding: '3px 6px',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {preview.mode === 'copy' && (
+          <span style={{ fontSize: 11, fontWeight: 800, color: accent, flexShrink: 0 }}>+</span>
+        )}
+        <span style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {preview.name}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, marginLeft: 'auto' }}>
+          {minutesToTime(preview.startMin)}–{minutesToTime(preview.endMin)}
+        </span>
+      </div>
     </div>
   )
 }

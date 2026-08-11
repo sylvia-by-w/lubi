@@ -1,12 +1,19 @@
 import { useState } from 'react'
-import type { TaskBlock, Category, Project, TimeQualityLevel } from '../types'
+import type { TaskBlock, Category, Project, TimeQualityLevel, RecurrenceFreq } from '../types'
+import { expandRecurrenceDates, weekdayOfDateStr } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
+
+const MAX_RECURRENCE_COUNT = 200
+const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] // Mon..Sun, values match Date#getDay()
+const WEEKDAY_LABEL_KEYS = ['weekdayMon', 'weekdayTue', 'weekdayWed', 'weekdayThu', 'weekdayFri', 'weekdaySat', 'weekdaySun']
 
 interface Props {
   open: boolean
   onClose: () => void
   onSave: (task: Omit<TaskBlock, 'id'>) => void
   onDelete?: (id: string) => void
+  onSaveRecurring?: (task: Omit<TaskBlock, 'id' | 'date' | 'recurrenceId'>, dates: string[]) => void
+  onDeleteSeries?: (recurrenceId: string) => void
   categories: Category[]
   projects: Project[]
   initialDate?: string
@@ -83,7 +90,7 @@ function getInitialFormState({
 }
 
 export default function TaskModal({
-  open, onClose, onSave, onDelete,
+  open, onClose, onSave, onDelete, onSaveRecurring, onDeleteSeries,
   categories, projects, initialDate, initialType, initialStartTime, initialEndTime,
   initialCategoryId, initialProjectId, initialProjectTaskId, initialName, editTask
 }: Props) {
@@ -99,6 +106,8 @@ export default function TaskModal({
       onClose={onClose}
       onDelete={onDelete}
       onSave={onSave}
+      onSaveRecurring={onSaveRecurring}
+      onDeleteSeries={onDeleteSeries}
       categories={categories}
       projects={projects}
       initialState={getInitialFormState({ categories, editTask, initialDate, initialEndTime, initialStartTime, initialType, initialCategoryId, initialProjectId, initialName })}
@@ -112,6 +121,8 @@ function TaskModalContent({
   onClose,
   onDelete,
   onSave,
+  onSaveRecurring,
+  onDeleteSeries,
   categories,
   projects,
   initialState,
@@ -121,6 +132,8 @@ function TaskModalContent({
   onClose: () => void
   onDelete?: (id: string) => void
   onSave: (task: Omit<TaskBlock, 'id'>) => void
+  onSaveRecurring?: (task: Omit<TaskBlock, 'id' | 'date' | 'recurrenceId'>, dates: string[]) => void
+  onDeleteSeries?: (recurrenceId: string) => void
   categories: Category[]
   projects: Project[]
   initialState: FormState
@@ -136,7 +149,38 @@ function TaskModalContent({
   const [type, setType] = useState<'plan' | 'actual'>(initialState.type)
   const [energyLevel, setEnergyLevel] = useState<TimeQualityLevel | ''>(initialState.energyLevel)
   const [valueLevel, setValueLevel] = useState<TimeQualityLevel | ''>(initialState.valueLevel)
+  const [repeatFreq, setRepeatFreq] = useState<RecurrenceFreq | 'none'>('none')
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>(
+    () => initialState.date ? [weekdayOfDateStr(initialState.date)] : []
+  )
+  const [repeatUntil, setRepeatUntil] = useState('')
   const { t } = useLanguage()
+
+  const canRepeat = !editTask && type === 'plan' && !!onSaveRecurring
+
+  const handleRepeatFreqChange = (freq: RecurrenceFreq | 'none') => {
+    setRepeatFreq(freq)
+    if (freq === 'weekly' && repeatWeekdays.length === 0 && date) {
+      setRepeatWeekdays([weekdayOfDateStr(date)])
+    }
+  }
+
+  const toggleRepeatWeekday = (day: number) => {
+    setRepeatWeekdays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])
+  }
+
+  const repeatDates = canRepeat && repeatFreq !== 'none' && date && repeatUntil
+    ? expandRecurrenceDates(date, repeatUntil, repeatFreq, repeatWeekdays, MAX_RECURRENCE_COUNT + 1)
+    : []
+
+  const repeatError = (() => {
+    if (!canRepeat || repeatFreq === 'none') return ''
+    if (!repeatUntil) return t('taskModal.repeatNeedUntil')
+    if (repeatUntil < date) return t('taskModal.repeatUntilBeforeStart')
+    if (repeatFreq === 'weekly' && repeatWeekdays.length === 0) return t('taskModal.repeatNeedWeekday')
+    if (repeatDates.length > MAX_RECURRENCE_COUNT) return t('taskModal.repeatTooMany', { max: MAX_RECURRENCE_COUNT })
+    return ''
+  })()
 
   const handleProjectChange = (nextProjectId: string) => {
     setProjectId(nextProjectId)
@@ -163,13 +207,34 @@ function TaskModalContent({
       return
     }
 
+    setRepeatFreq('none')
     if (!valueLevel) {
       setValueLevel(suggestedValueLevel(categories, categoryId))
     }
   }
 
+  const saveDisabled = !name.trim() || !categoryId || !date || !!repeatError
+
   const handleSave = () => {
-    if (!name.trim() || !categoryId || !date) return
+    if (saveDisabled) return
+
+    if (canRepeat && repeatFreq !== 'none' && onSaveRecurring) {
+      if (repeatDates.length === 0) return
+      onSaveRecurring({
+        name: name.trim(),
+        categoryId,
+        projectId: projectId || undefined,
+        projectTaskId,
+        startTime,
+        endTime,
+        type,
+        energyLevel: undefined,
+        valueLevel: undefined,
+      }, repeatDates)
+      onClose()
+      return
+    }
+
     onSave({
       name: name.trim(),
       categoryId,
@@ -183,6 +248,14 @@ function TaskModalContent({
       valueLevel: type === 'actual' && valueLevel ? valueLevel : undefined,
     })
     onClose()
+  }
+
+  const handleDeleteSeries = () => {
+    if (!editTask?.recurrenceId || !onDeleteSeries) return
+    if (confirm(t('taskModal.confirmDeleteSeries'))) {
+      onDeleteSeries(editTask.recurrenceId)
+      onClose()
+    }
   }
 
   return (
@@ -258,12 +331,77 @@ function TaskModalContent({
           </div>
         )}
 
-        <div style={{ ...styles.row, marginTop: 24 }}>
+        {canRepeat && (
+          <>
+            <label style={styles.label}>{t('taskModal.repeat')}</label>
+            <div style={styles.row}>
+              <button
+                style={{ ...styles.typeBtn, ...(repeatFreq === 'none' ? styles.typeBtnActive : {}) }}
+                onClick={() => handleRepeatFreqChange('none')}
+              >{t('taskModal.repeatNone')}</button>
+              <button
+                style={{ ...styles.typeBtn, ...(repeatFreq === 'daily' ? styles.typeBtnActive : {}) }}
+                onClick={() => handleRepeatFreqChange('daily')}
+              >{t('taskModal.repeatDaily')}</button>
+              <button
+                style={{ ...styles.typeBtn, ...(repeatFreq === 'weekly' ? styles.typeBtnActive : {}) }}
+                onClick={() => handleRepeatFreqChange('weekly')}
+              >{t('taskModal.repeatWeekly')}</button>
+            </div>
+
+            {repeatFreq === 'weekly' && (
+              <div style={styles.qualityRow}>
+                {WEEKDAY_ORDER.map((day, i) => (
+                  <button
+                    key={day}
+                    style={{
+                      ...styles.qualityBtn,
+                      ...(repeatWeekdays.includes(day) ? styles.qualityBtnActive : {}),
+                    }}
+                    onClick={() => toggleRepeatWeekday(day)}
+                  >
+                    {t(`taskModal.${WEEKDAY_LABEL_KEYS[i]}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {repeatFreq !== 'none' && (
+              <>
+                <label style={styles.label}>{t('taskModal.repeatUntil')}</label>
+                <input
+                  style={styles.input}
+                  type="date"
+                  min={date}
+                  value={repeatUntil}
+                  onChange={e => setRepeatUntil(e.target.value)}
+                />
+                {repeatError ? (
+                  <p style={styles.repeatError}>{repeatError}</p>
+                ) : repeatDates.length > 0 ? (
+                  <p style={styles.repeatHint}>{t('taskModal.repeatCountInfo', { n: repeatDates.length })}</p>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+
+        {editTask?.recurrenceId && onDeleteSeries && (
+          <button style={styles.seriesDeleteLink} onClick={handleDeleteSeries}>
+            {t('taskModal.deleteSeries')}
+          </button>
+        )}
+
+        <div style={{ ...styles.row, marginTop: editTask?.recurrenceId ? 8 : 24 }}>
           {editTask && onDelete && (
             <button style={styles.deleteBtn} onClick={() => { onDelete(editTask.id); onClose() }}>{t('common.delete')}</button>
           )}
           <button style={styles.cancelBtn} onClick={onClose}>{t('common.cancel')}</button>
-          <button style={styles.saveBtn} onClick={handleSave}>{t('common.save')}</button>
+          <button
+            style={{ ...styles.saveBtn, ...(saveDisabled ? styles.saveBtnDisabled : {}) }}
+            onClick={handleSave}
+            disabled={saveDisabled}
+          >{t('common.save')}</button>
         </div>
       </div>
     </div>
@@ -347,5 +485,18 @@ const styles: Record<string, React.CSSProperties> = {
   deleteBtn: {
     flex: 1, padding: '10px 0', borderRadius: 'var(--radius-sm)', border: 'none',
     background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: 14, cursor: 'pointer', fontWeight: 700,
+  },
+  saveBtnDisabled: {
+    opacity: 0.5, cursor: 'not-allowed',
+  },
+  repeatHint: {
+    margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600,
+  },
+  repeatError: {
+    margin: '2px 0 0', fontSize: 12, color: 'var(--danger)', fontWeight: 700,
+  },
+  seriesDeleteLink: {
+    marginTop: 24, background: 'transparent', border: 'none', color: 'var(--danger)',
+    fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center', padding: '4px 0',
   },
 }

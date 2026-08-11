@@ -167,6 +167,22 @@ export function useStore() {
     setTasks(prev => prev.filter(t => t.id !== id))
   }
 
+  const addRecurringTasks = (base: Omit<TaskBlock, 'id' | 'date' | 'recurrenceId'>, dates: string[]) => {
+    if (dates.length === 0) return
+    const recurrenceId = crypto.randomUUID()
+    const newTasks: TaskBlock[] = dates.map(date => ({
+      ...base,
+      date,
+      recurrenceId,
+      id: crypto.randomUUID(),
+    }))
+    setTasks(prev => [...prev, ...newTasks])
+  }
+
+  const deleteTasksByRecurrenceId = (recurrenceId: string) => {
+    setTasks(prev => prev.filter(t => t.recurrenceId !== recurrenceId))
+  }
+
   /**
    * Saves the timer as one or more 'actual' blocks, trimming away any part of
    * its span that already overlaps an existing actual record for that date
@@ -309,7 +325,7 @@ export function useStore() {
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
-    addTask, updateTask, deleteTask,
+    addTask, updateTask, deleteTask, addRecurringTasks, deleteTasksByRecurrenceId,
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog,
     upsertMonthlyNote,

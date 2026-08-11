@@ -36,7 +36,7 @@ function getMonday(date: Date): Date {
 export default function App() {
   const {
     categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
-    addTask, updateTask, deleteTask,
+    addTask, updateTask, deleteTask, addRecurringTasks, deleteTasksByRecurrenceId,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
@@ -124,6 +124,23 @@ export default function App() {
     })
   }
 
+  const handleMoveTask = (id: string, updates: { date: string; startTime: string; endTime: string }) => {
+    updateTask(id, updates)
+  }
+
+  const handleDuplicateTask = (task: TaskBlock, updates: { date: string; startTime: string; endTime: string }) => {
+    addTask({
+      name: task.name,
+      categoryId: task.categoryId,
+      projectId: task.projectId,
+      projectTaskId: task.projectTaskId,
+      type: task.type,
+      energyLevel: task.energyLevel,
+      valueLevel: task.valueLevel,
+      ...updates,
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <NavBar
@@ -157,6 +174,8 @@ export default function App() {
           onClickTask={handleClickTask}
           onLogActualFromPlan={handleLogActualFromPlan}
           onStartTimerFromPlan={handleStartTimerFromPlan}
+          onMoveTask={handleMoveTask}
+          onDuplicateTask={handleDuplicateTask}
           activeTimer={activeTimer}
           onStopTimer={stopTimer}
         />
@@ -215,6 +234,8 @@ export default function App() {
         onClose={() => setModalOpen(false)}
         onSave={editTask ? (t) => updateTask(editTask.id, t) : addTask}
         onDelete={deleteTask}
+        onSaveRecurring={addRecurringTasks}
+        onDeleteSeries={deleteTasksByRecurrenceId}
         categories={categories}
         projects={projects}
         initialDate={taskDefaults?.date}

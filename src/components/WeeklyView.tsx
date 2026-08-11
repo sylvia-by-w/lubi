@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ActiveTimer, AIReview, Deadline, ProjectTask, TaskBlock, Category, Project } from '../types'
 import { getWeekDays, formatDate, formatDayLabel, minutesToTime, timeToMinutes } from '../utils/time'
@@ -13,7 +13,7 @@ import {
   type ReviewTotal,
   type WeeklyReviewData,
 } from '../services/aiReviewService'
-import DayColumn from './DayColumn'
+import DayColumn, { type DragPreview } from './DayColumn'
 import './WeeklyView.css'
 import { useLanguage } from '../i18n/LanguageContext'
 
@@ -36,6 +36,8 @@ interface Props {
   onClickTask: (task: TaskBlock) => void
   onLogActualFromPlan: (task: TaskBlock) => void
   onStartTimerFromPlan: (task: TaskBlock) => void
+  onMoveTask: (id: string, updates: { date: string; startTime: string; endTime: string }) => void
+  onDuplicateTask: (task: TaskBlock, updates: { date: string; startTime: string; endTime: string }) => void
   activeTimer: ActiveTimer | null
   onStopTimer: () => void
 }
@@ -47,8 +49,22 @@ interface LegacyDailyReview {
   tomorrowAdjustment: string
 }
 
+interface BlockDragState {
+  task: TaskBlock
+  pointerId: number
+  grabOffsetMin: number
+  startClientX: number
+  startClientY: number
+  moved: boolean
+  mode: 'move' | 'copy'
+  targetDate: string
+  targetStartMin: number
+}
+
 const SLOT_HEIGHT = 20
 const TOTAL_HEIGHT = 96 * SLOT_HEIGHT
+const SLOT_MINUTES = 15
+const DRAG_THRESHOLD_PX = 4
 const DAILY_REVIEWS_KEY = 'lyubishchev_daily_reviews'
 const WEEKLY_FINDINGS_KEY = 'lyubishchev_weekly_findings'
 const AI_DAILY_REVIEWS_KEY = 'lubi_ai_daily_reviews'
@@ -304,12 +320,16 @@ export default function WeeklyView({
   onClickTask,
   onLogActualFromPlan,
   onStartTimerFromPlan,
+  onMoveTask,
+  onDuplicateTask,
   activeTimer,
   onStopTimer,
 }: Props) {
   const { t, lang } = useLanguage()
   useTicker(!!activeTimer, 30000)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const dayColRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null)
   const days = useMemo(() => getWeekDays(weekStart), [weekStart])
   const weekKey = formatDate(weekStart)
   const today = formatDate(new Date())
@@ -545,6 +565,140 @@ export default function WeeklyView({
     onCreateSelection(selection)
   }
 
+  const registerDayRef = (dateStr: string, el: HTMLDivElement | null) => {
+    if (el) dayColRefs.current.set(dateStr, el)
+    else dayColRefs.current.delete(dateStr)
+  }
+
+  const findColumnAt = (clientX: number): { date: string; el: HTMLDivElement } | null => {
+    let best: { date: string; el: HTMLDivElement; dist: number } | null = null
+    dayColRefs.current.forEach((el, date) => {
+      const rect = el.getBoundingClientRect()
+      const dist = clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0
+      if (!best || dist < best.dist) best = { date, el, dist }
+    })
+    return best
+  }
+
+  const minutesFromClientY = (clientY: number, el: HTMLDivElement) => {
+    const rect = el.getBoundingClientRect()
+    const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0
+    return Math.max(0, Math.min(1439, ratio * 24 * 60))
+  }
+
+  const dragModeFromEvent = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean }): 'move' | 'copy' =>
+    (e.altKey || e.ctrlKey || e.metaKey) ? 'copy' : 'move'
+
+  const handleBlockPointerDown = (task: TaskBlock, e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const el = e.currentTarget
+    el.setPointerCapture(e.pointerId)
+    document.body.style.userSelect = 'none'
+    const startMin = timeToMinutes(task.startTime)
+    const grabMin = minutesFromClientY(e.clientY, el) - startMin
+    setBlockDrag({
+      task,
+      pointerId: e.pointerId,
+      grabOffsetMin: grabMin,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      moved: false,
+      mode: dragModeFromEvent(e),
+      targetDate: task.date,
+      targetStartMin: startMin,
+    })
+  }
+
+  const handleBlockPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!blockDrag) return
+    const dx = e.clientX - blockDrag.startClientX
+    const dy = e.clientY - blockDrag.startClientY
+    const moved = blockDrag.moved || Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX
+    const col = findColumnAt(e.clientX)
+    if (!col) {
+      if (moved !== blockDrag.moved) setBlockDrag({ ...blockDrag, moved })
+      return
+    }
+    const duration = timeToMinutes(blockDrag.task.endTime) - timeToMinutes(blockDrag.task.startTime)
+    const rawMin = minutesFromClientY(e.clientY, col.el)
+    let newStart = Math.round((rawMin - blockDrag.grabOffsetMin) / SLOT_MINUTES) * SLOT_MINUTES
+    newStart = Math.max(0, Math.min(24 * 60 - duration, newStart))
+    const mode = dragModeFromEvent(e)
+    if (
+      moved === blockDrag.moved &&
+      col.date === blockDrag.targetDate &&
+      newStart === blockDrag.targetStartMin &&
+      mode === blockDrag.mode
+    ) {
+      return
+    }
+    setBlockDrag({
+      ...blockDrag,
+      moved,
+      targetDate: col.date,
+      targetStartMin: newStart,
+      mode,
+    })
+  }
+
+  const releaseBlockDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    document.body.style.userSelect = ''
+  }
+
+  const handleBlockPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const current = blockDrag
+    if (!current) return
+    releaseBlockDrag(e)
+    setBlockDrag(null)
+
+    if (!current.moved) {
+      onClickTask(current.task)
+      return
+    }
+
+    const duration = timeToMinutes(current.task.endTime) - timeToMinutes(current.task.startTime)
+    const newStartTime = minutesToTime(current.targetStartMin)
+    const newEndTime = minutesToTime(current.targetStartMin + duration)
+    if (current.targetDate === current.task.date && newStartTime === current.task.startTime) return
+
+    if (current.mode === 'copy') {
+      onDuplicateTask(current.task, { date: current.targetDate, startTime: newStartTime, endTime: newEndTime })
+    } else {
+      onMoveTask(current.task.id, { date: current.targetDate, startTime: newStartTime, endTime: newEndTime })
+    }
+  }
+
+  const handleBlockPointerCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!blockDrag) return
+    releaseBlockDrag(e)
+    setBlockDrag(null)
+  }
+
+  useEffect(() => {
+    if (blockDrag && blockDrag.moved) {
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = blockDrag.mode === 'copy' ? 'copy' : 'grabbing'
+    } else {
+      document.body.style.cursor = ''
+    }
+    return () => { document.body.style.cursor = '' }
+  }, [blockDrag])
+
+  const dragPreview: DragPreview | null = blockDrag && blockDrag.moved
+    ? {
+        startMin: blockDrag.targetStartMin,
+        endMin: blockDrag.targetStartMin + (timeToMinutes(blockDrag.task.endTime) - timeToMinutes(blockDrag.task.startTime)),
+        type: blockDrag.task.type,
+        mode: blockDrag.mode,
+        name: blockDrag.task.name,
+        categoryId: blockDrag.task.categoryId,
+      }
+    : null
+  const hiddenTaskId = blockDrag && blockDrag.moved && blockDrag.mode === 'move' ? blockDrag.task.id : null
+
   return (
     <div className="weekly-dashboard">
       <aside className="weekly-sidebar weekly-sidebar-left">
@@ -635,11 +789,17 @@ export default function WeeklyView({
                   tasks={dayTasks}
                   categories={categories}
                   onCreateSelection={handleCreateSelection}
-                  onClickTask={onClickTask}
                   onLogActualFromPlan={onLogActualFromPlan}
                   onStartTimerFromPlan={onStartTimerFromPlan}
                   liveEntry={activeTimer?.date === dateStr ? liveEntry : null}
                   onStopTimer={onStopTimer}
+                  onBlockPointerDown={handleBlockPointerDown}
+                  onBlockPointerMove={handleBlockPointerMove}
+                  onBlockPointerUp={handleBlockPointerUp}
+                  onBlockPointerCancel={handleBlockPointerCancel}
+                  hiddenTaskId={hiddenTaskId}
+                  dragPreview={dragPreview && blockDrag?.targetDate === dateStr ? dragPreview : null}
+                  registerRef={el => registerDayRef(dateStr, el)}
                 />
               )
             })}

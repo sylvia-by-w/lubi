@@ -80,7 +80,10 @@ export interface TaskBlock {
   type: 'plan' | 'actual'
   energyLevel?: TimeQualityLevel
   valueLevel?: TimeQualityLevel
+  recurrenceId?: string
 }
+
+export type RecurrenceFreq = 'daily' | 'weekly'
 
 export interface ActiveTimer {
   id: string
