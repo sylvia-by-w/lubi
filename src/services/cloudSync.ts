@@ -53,3 +53,20 @@ export async function pushRemoteData(userId: string, data: Record<string, unknow
 export function snapshotHasContent(data: Record<string, unknown>): boolean {
   return Object.values(data).some(v => Array.isArray(v) && v.length > 0)
 }
+
+/**
+ * Extracts a readable message from anything a Supabase call might throw.
+ * Supabase/PostgREST errors are plain objects with a `message` field, not
+ * `Error` instances, so `String(err)` alone collapses them to "[object Object]".
+ */
+export function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    return (err as { message: string }).message
+  }
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return String(err)
+  }
+}

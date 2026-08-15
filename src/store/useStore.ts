@@ -12,6 +12,7 @@ import {
   fetchRemoteData,
   pushRemoteData,
   snapshotHasContent,
+  errorMessage,
   type Session,
 } from '../services/cloudSync'
 
@@ -385,7 +386,7 @@ export function useStore() {
       } catch (err) {
         if (!cancelled) {
           setSyncStatus('error')
-          setSyncError(err instanceof Error ? err.message : String(err))
+          setSyncError(errorMessage(err))
         }
       } finally {
         if (!cancelled) setReconciledUserId(user.id)
@@ -411,7 +412,7 @@ export function useStore() {
         .then(() => setSyncStatus('synced'))
         .catch(err => {
           setSyncStatus('error')
-          setSyncError(err instanceof Error ? err.message : String(err))
+          setSyncError(errorMessage(err))
         })
     }, 1500)
     return () => { if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current) }
@@ -422,7 +423,7 @@ export function useStore() {
     try {
       return await signUpWithEmail(email, password)
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : String(err))
+      setAuthError(errorMessage(err))
       return null
     }
   }
@@ -433,7 +434,7 @@ export function useStore() {
       await signInWithEmail(email, password)
       return true
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : String(err))
+      setAuthError(errorMessage(err))
       return false
     }
   }
