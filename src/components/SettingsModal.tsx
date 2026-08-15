@@ -23,6 +23,14 @@ interface Props {
   onImportAllData: (json: string) => void
   aiConfig: AIConfig
   onUpdateAIConfig: (updates: Partial<AIConfig>) => void
+  user: { id: string; email?: string | null } | null
+  authLoading: boolean
+  authError: string
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'error'
+  syncError: string
+  onSignUp: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean } | null>
+  onSignIn: (email: string, password: string) => Promise<boolean>
+  onSignOut: () => Promise<void>
 }
 
 const PRESET_COLORS = [
@@ -37,6 +45,7 @@ export default function SettingsModal({
   onAddProject, onDeleteProject,
   onExportAllData, onImportAllData,
   aiConfig, onUpdateAIConfig,
+  user, authLoading, authError, syncStatus, syncError, onSignUp, onSignIn, onSignOut,
 }: Props) {
   const [catName, setCatName] = useState('')
   const [catColor, setCatColor] = useState(PRESET_COLORS[0])
@@ -46,6 +55,11 @@ export default function SettingsModal({
   const [importMessage, setImportMessage] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [testMessage, setTestMessage] = useState('')
+  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [authNotice, setAuthNotice] = useState('')
   const { t, lang, setLang } = useLanguage()
 
   const handleExport = () => {
@@ -74,6 +88,24 @@ export default function SettingsModal({
     }
     reader.readAsText(file)
     event.target.value = ''
+  }
+
+  const handleAuthSubmit = async () => {
+    if (!authEmail.trim() || !authPassword) return
+    setAuthSubmitting(true)
+    setAuthNotice('')
+    try {
+      if (authMode === 'signIn') {
+        await onSignIn(authEmail.trim(), authPassword)
+      } else {
+        const result = await onSignUp(authEmail.trim(), authPassword)
+        if (result?.needsEmailConfirmation) {
+          setAuthNotice(t('settingsModal.authCheckEmail'))
+        }
+      }
+    } finally {
+      setAuthSubmitting(false)
+    }
   }
 
   if (!open) return null
@@ -343,6 +375,64 @@ export default function SettingsModal({
 
         {tab === 'backup' && (
           <div>
+            <h3 style={styles.sectionTitle}>{t('settingsModal.accountTitle')}</h3>
+            {authLoading ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>{t('common.loading')}</p>
+            ) : user ? (
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
+                  {t('settingsModal.signedInAs', { email: user.email ?? '' })}
+                </p>
+                <p style={{ fontSize: 12, fontWeight: 700, marginTop: 0, color: syncStatus === 'error' ? 'var(--danger)' : 'var(--text-secondary)' }}>
+                  {syncStatus === 'syncing' && t('settingsModal.syncSyncing')}
+                  {syncStatus === 'synced' && t('settingsModal.syncSynced')}
+                  {syncStatus === 'error' && `${t('settingsModal.syncError')}${syncError ? `: ${syncError}` : ''}`}
+                  {syncStatus === 'idle' && t('settingsModal.syncIdle')}
+                </p>
+                <button
+                  onClick={() => onSignOut()}
+                  style={{ ...styles.addBtn, background: 'var(--surface-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                >{t('settingsModal.signOut')}</button>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
+                  {t('settingsModal.accountIntro')}
+                </p>
+                <div style={styles.tabs}>
+                  <button
+                    style={{ ...styles.tab, ...(authMode === 'signIn' ? styles.tabActive : {}) }}
+                    onClick={() => { setAuthMode('signIn'); setAuthNotice('') }}
+                  >{t('settingsModal.signIn')}</button>
+                  <button
+                    style={{ ...styles.tab, ...(authMode === 'signUp' ? styles.tabActive : {}) }}
+                    onClick={() => { setAuthMode('signUp'); setAuthNotice('') }}
+                  >{t('settingsModal.signUp')}</button>
+                </div>
+                <input
+                  style={{ ...styles.input, width: '100%', boxSizing: 'border-box', display: 'block', marginBottom: 8 }}
+                  type="email"
+                  placeholder={t('settingsModal.emailPlaceholder')}
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                />
+                <input
+                  style={{ ...styles.input, width: '100%', boxSizing: 'border-box', display: 'block', marginBottom: 8 }}
+                  type="password"
+                  placeholder={t('settingsModal.passwordPlaceholder')}
+                  value={authPassword}
+                  onChange={e => setAuthPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAuthSubmit()}
+                />
+                <button onClick={handleAuthSubmit} disabled={authSubmitting} style={{ ...styles.addBtn, width: '100%', opacity: authSubmitting ? 0.6 : 1 }}>
+                  {authSubmitting ? t('common.loading') : authMode === 'signIn' ? t('settingsModal.signIn') : t('settingsModal.signUp')}
+                </button>
+                {authError && <p style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 700 }}>{authError}</p>}
+                {authNotice && <p style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700 }}>{authNotice}</p>}
+              </div>
+            )}
+
+            <h3 style={styles.sectionTitle}>{t('settingsModal.tabBackup')}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 0 }}>
               {t('settingsModal.backupIntro')}
             </p>
@@ -377,6 +467,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent', fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 700,
   },
   tabActive: { background: 'var(--surface)', color: 'var(--primary)', fontWeight: 800, boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)' },
+  sectionTitle: { margin: '0 0 8px', fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' },
   addRow: { display: 'flex', gap: 8, marginBottom: 12 },
   input: {
     padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: 14,

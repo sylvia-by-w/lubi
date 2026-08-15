@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ActiveTimer, Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
 import { DEFAULT_AI_CONFIG, type AIConfig } from '../services/aiReviewService'
 import { minutesToTime, subtractTimeRanges, timeToMinutes } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
+import {
+  getSession,
+  onAuthStateChange,
+  signUpWithEmail,
+  signInWithEmail,
+  signOut as signOutRemote,
+  fetchRemoteData,
+  pushRemoteData,
+  snapshotHasContent,
+  type Session,
+} from '../services/cloudSync'
 
 const KEYS = {
   categories: 'lyubishchev_categories',
@@ -87,6 +98,15 @@ export function useStore() {
     load<ActiveTimer | null>(KEYS.activeTimer, null)
   )
 
+  const [user, setUser] = useState<Session['user'] | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
+  const [syncError, setSyncError] = useState('')
+  const [reconciledUserId, setReconciledUserId] = useState<string | null>(null)
+  const reconcileStartedRef = useRef<string | null>(null)
+  const pushTimerRef = useRef<number | null>(null)
+
   useEffect(() => save(KEYS.categories, categories), [categories])
   useEffect(() => save(KEYS.projects, projects), [projects])
   useEffect(() => save(KEYS.projectTasks, projectTasks), [projectTasks])
@@ -97,6 +117,16 @@ export function useStore() {
   useEffect(() => save(KEYS.monthlyNotes, monthlyNotes), [monthlyNotes])
   useEffect(() => save(KEYS.aiConfig, aiConfig), [aiConfig])
   useEffect(() => save(KEYS.activeTimer, activeTimer), [activeTimer])
+
+  useEffect(() => {
+    let cancelled = false
+    getSession()
+      .then(session => { if (!cancelled) setUser(session?.user ?? null) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setAuthLoading(false) })
+    const unsubscribe = onAuthStateChange(session => setUser(session?.user ?? null))
+    return () => { cancelled = true; unsubscribe() }
+  }, [])
 
   const addCategory = (cat: Omit<Category, 'id'>) => {
     const newCat = { ...cat, id: crypto.randomUUID() }
@@ -320,6 +350,100 @@ export function useStore() {
     if (Array.isArray(data.monthlyNotes)) setMonthlyNotes(data.monthlyNotes)
   }
 
+  // On sign-in, reconcile whatever's already in this browser with whatever's
+  // already in the cloud, then hand off to the debounced auto-push effect
+  // below for every change after that.
+  useEffect(() => {
+    if (!user) {
+      reconcileStartedRef.current = null
+      return
+    }
+    if (reconcileStartedRef.current === user.id) return
+    reconcileStartedRef.current = user.id
+    let cancelled = false
+    setSyncStatus('syncing')
+    setSyncError('')
+
+    ;(async () => {
+      try {
+        const remote = await fetchRemoteData(user.id)
+        const localSnapshot = JSON.parse(exportAllData())
+        const remoteHasContent = remote ? snapshotHasContent(remote.data) : false
+        const localHasContent = snapshotHasContent(localSnapshot)
+
+        if (remoteHasContent && localHasContent) {
+          const useRemote = confirm(t('settingsModal.syncConflictConfirm'))
+          if (cancelled) return
+          if (useRemote) importAllData(JSON.stringify(remote!.data))
+          else await pushRemoteData(user.id, localSnapshot)
+        } else if (remoteHasContent) {
+          importAllData(JSON.stringify(remote!.data))
+        } else {
+          await pushRemoteData(user.id, localSnapshot)
+        }
+        if (!cancelled) setSyncStatus('synced')
+      } catch (err) {
+        if (!cancelled) {
+          setSyncStatus('error')
+          setSyncError(err instanceof Error ? err.message : String(err))
+        }
+      } finally {
+        if (!cancelled) setReconciledUserId(user.id)
+      }
+    })()
+
+    return () => { cancelled = true }
+    // Intentionally re-runs only when `user` changes — the ref guard above
+    // makes this a run-once-per-login effect; `exportAllData`/`t` are stable
+    // enough in practice and re-including them would refire on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
+  // Debounced auto-push: once reconciled, mirror every local change to the
+  // cloud a moment after the user stops editing.
+  useEffect(() => {
+    if (!user || reconciledUserId !== user.id) return
+    if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
+    const snapshot = { categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes }
+    pushTimerRef.current = window.setTimeout(() => {
+      setSyncStatus('syncing')
+      pushRemoteData(user.id, snapshot)
+        .then(() => setSyncStatus('synced'))
+        .catch(err => {
+          setSyncStatus('error')
+          setSyncError(err instanceof Error ? err.message : String(err))
+        })
+    }, 1500)
+    return () => { if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current) }
+  }, [user, reconciledUserId, categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes])
+
+  const signUp = async (email: string, password: string) => {
+    setAuthError('')
+    try {
+      return await signUpWithEmail(email, password)
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : String(err))
+      return null
+    }
+  }
+
+  const signIn = async (email: string, password: string) => {
+    setAuthError('')
+    try {
+      await signInWithEmail(email, password)
+      return true
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : String(err))
+      return false
+    }
+  }
+
+  const signOutUser = async () => {
+    await signOutRemote()
+    setSyncStatus('idle')
+    setSyncError('')
+  }
+
   return {
     categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
     addCategory, deleteCategory,
@@ -332,5 +456,7 @@ export function useStore() {
     updateAIConfig,
     startTimer, stopTimer, discardTimer,
     exportAllData, importAllData,
+    user, authLoading, authError, syncStatus, syncError,
+    signUp, signIn, signOutUser,
   }
 }

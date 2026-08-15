@@ -44,7 +44,8 @@ export default function App() {
     addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote,
     updateAIConfig,
     startTimer, stopTimer, discardTimer,
-    exportAllData, importAllData
+    exportAllData, importAllData,
+    user, authLoading, authError, syncStatus, syncError, signUp, signIn, signOutUser,
   } = useStore()
 
   const [page, setPage] = useState<'weekly' | 'board' | 'month' | 'projects' | 'statistics'>('weekly')
@@ -262,6 +263,14 @@ export default function App() {
         onImportAllData={importAllData}
         aiConfig={aiConfig}
         onUpdateAIConfig={updateAIConfig}
+        user={user}
+        authLoading={authLoading}
+        authError={authError}
+        syncStatus={syncStatus}
+        syncError={syncError}
+        onSignUp={signUp}
+        onSignIn={signIn}
+        onSignOut={signOutUser}
       />
 
       <TimerStartModal
