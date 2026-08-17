@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ActiveTimer, Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock } from '../types'
+import type { ActiveTimer, Category, Deadline, HabitItem, HabitLog, MonthlyNote, Project, ProjectTask, TaskBlock, WeeklyNote } from '../types'
 import { DEFAULT_AI_CONFIG, type AIConfig } from '../services/aiReviewService'
 import { minutesToTime, subtractTimeRanges, timeToMinutes } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
@@ -25,6 +25,7 @@ const KEYS = {
   habits: 'lyubishchev_habits',
   habitLogs: 'lyubishchev_habit_logs',
   monthlyNotes: 'lyubishchev_monthly_notes',
+  weeklyNotes: 'lyubishchev_weekly_notes',
   aiConfig: 'lyubishchev_ai_config',
   activeTimer: 'lyubishchev_active_timer',
 }
@@ -92,6 +93,9 @@ export function useStore() {
   const [monthlyNotes, setMonthlyNotes] = useState<MonthlyNote[]>(() =>
     load(KEYS.monthlyNotes, [])
   )
+  const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>(() =>
+    load(KEYS.weeklyNotes, [])
+  )
   const [aiConfig, setAiConfig] = useState<AIConfig>(() =>
     load(KEYS.aiConfig, DEFAULT_AI_CONFIG)
   )
@@ -116,6 +120,7 @@ export function useStore() {
   useEffect(() => save(KEYS.habits, habits), [habits])
   useEffect(() => save(KEYS.habitLogs, habitLogs), [habitLogs])
   useEffect(() => save(KEYS.monthlyNotes, monthlyNotes), [monthlyNotes])
+  useEffect(() => save(KEYS.weeklyNotes, weeklyNotes), [weeklyNotes])
   useEffect(() => save(KEYS.aiConfig, aiConfig), [aiConfig])
   useEffect(() => save(KEYS.activeTimer, activeTimer), [activeTimer])
 
@@ -335,8 +340,16 @@ export function useStore() {
     })
   }
 
+  const upsertWeeklyNote = (week: string, updates: Partial<Omit<WeeklyNote, 'id' | 'week'>>) => {
+    setWeeklyNotes(prev => {
+      const existing = prev.find(n => n.week === week)
+      if (existing) return prev.map(n => n.id === existing.id ? { ...n, ...updates } : n)
+      return [...prev, { id: crypto.randomUUID(), week, ...updates }]
+    })
+  }
+
   const exportAllData = () => {
-    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes }, null, 2)
+    return JSON.stringify({ categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, weeklyNotes }, null, 2)
   }
 
   const importAllData = (json: string) => {
@@ -349,6 +362,7 @@ export function useStore() {
     if (Array.isArray(data.habits)) setHabits(data.habits)
     if (Array.isArray(data.habitLogs)) setHabitLogs(data.habitLogs)
     if (Array.isArray(data.monthlyNotes)) setMonthlyNotes(data.monthlyNotes)
+    if (Array.isArray(data.weeklyNotes)) setWeeklyNotes(data.weeklyNotes)
   }
 
   // On sign-in, reconcile whatever's already in this browser with whatever's
@@ -405,7 +419,7 @@ export function useStore() {
   useEffect(() => {
     if (!user || reconciledUserId !== user.id) return
     if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
-    const snapshot = { categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes }
+    const snapshot = { categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, weeklyNotes }
     pushTimerRef.current = window.setTimeout(() => {
       setSyncStatus('syncing')
       pushRemoteData(user.id, snapshot)
@@ -416,7 +430,7 @@ export function useStore() {
         })
     }, 1500)
     return () => { if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current) }
-  }, [user, reconciledUserId, categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes])
+  }, [user, reconciledUserId, categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, weeklyNotes])
 
   const signUp = async (email: string, password: string) => {
     setAuthError('')
@@ -446,7 +460,7 @@ export function useStore() {
   }
 
   return {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, weeklyNotes, aiConfig, activeTimer,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
@@ -454,6 +468,7 @@ export function useStore() {
     addDeadline, updateDeadline, deleteDeadline,
     addHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog,
     upsertMonthlyNote,
+    upsertWeeklyNote,
     updateAIConfig,
     startTimer, stopTimer, discardTimer,
     exportAllData, importAllData,

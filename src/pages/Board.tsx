@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock } from '../types'
+import type { Category, HabitItem, Project, ProjectTask, ProjectTaskStatus, PriorityLevel, TaskBlock, WeeklyNote, WeeklyPlanItem } from '../types'
 import { formatDate, timeToMinutes, minutesToTime } from '../utils/time'
 import { useLanguage } from '../i18n/LanguageContext'
 
@@ -25,6 +25,8 @@ interface Props {
   onUnarchiveHabit: (id: string) => void
   onToggleHabitLog: (habitId: string, date: string) => void
   habitLogs: { id: string; habitId: string; date: string }[]
+  weeklyNotes: WeeklyNote[]
+  onUpsertWeeklyNote: (week: string, updates: Partial<Omit<WeeklyNote, 'id' | 'week'>>) => void
 }
 
 const STATUS_ORDER: ProjectTaskStatus[] = ['todo', 'in_progress', 'done']
@@ -122,10 +124,11 @@ interface NewTaskForm {
 const emptyForm: NewTaskForm = { title: '', categoryId: '', projectId: '', dueDate: '', priority: 'medium', startTime: '', endTime: '' }
 
 export default function Board({
-  projectTasks, categories, projects, habits, habitLogs, tasks,
+  projectTasks, categories, projects, habits, habitLogs, tasks, weeklyNotes,
   onAddProjectTask, onUpdateProjectTask, onDeleteProjectTask, onUpdateProject,
   onAddTask, onUpdateTask, onDeleteTask,
   onAddHabit, onDeleteHabit, onArchiveHabit, onUnarchiveHabit,
+  onUpsertWeeklyNote,
 }: Props) {
   const { t, lang } = useLanguage()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfToday()))
@@ -142,9 +145,51 @@ export default function Board({
   const [showHiddenProjects, setShowHiddenProjects] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [postponingTaskId, setPostponingTaskId] = useState<string | null>(null)
+  const [newWeekItemTitle, setNewWeekItemTitle] = useState('')
+  const [newWeekItemCategoryId, setNewWeekItemCategoryId] = useState('')
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayStr = formatDate(startOfToday())
+  const weekKey = formatDate(weekStart)
+  const weekEnd = addDays(weekStart, 6)
+  const weekRangeLabel = `${weekStart.getMonth() + 1}/${weekStart.getDate()} - ${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`
+  const weekNote = weeklyNotes.find(n => n.week === weekKey)
+  const weekPlanItems = weekNote?.planItems ?? []
+  const groupedWeekPlanItems = (() => {
+    const byCat = new Map<string, WeeklyPlanItem[]>()
+    weekPlanItems.forEach(item => {
+      const key = item.categoryId ?? '__none__'
+      if (!byCat.has(key)) byCat.set(key, [])
+      byCat.get(key)!.push(item)
+    })
+    const groups: { key: string; label: string; color: string; items: WeeklyPlanItem[] }[] = []
+    categories.forEach(c => {
+      const list = byCat.get(c.id)
+      if (list && list.length) groups.push({ key: c.id, label: c.name, color: c.color, items: list })
+    })
+    const none = byCat.get('__none__')
+    if (none && none.length) groups.push({ key: '__none__', label: t('monthPlan.uncategorized'), color: 'var(--text-muted)', items: none })
+    return groups
+  })()
+  const weekPlanDoneCount = weekPlanItems.filter(i => i.done).length
+
+  const handleAddWeekPlanItem = () => {
+    if (!newWeekItemTitle.trim()) return
+    const item: WeeklyPlanItem = {
+      id: crypto.randomUUID(),
+      title: newWeekItemTitle.trim(),
+      categoryId: newWeekItemCategoryId || undefined,
+      done: false,
+    }
+    onUpsertWeeklyNote(weekKey, { planItems: [...weekPlanItems, item] })
+    setNewWeekItemTitle('')
+  }
+  const handleToggleWeekPlanItem = (id: string) => {
+    onUpsertWeeklyNote(weekKey, { planItems: weekPlanItems.map(i => i.id === id ? { ...i, done: !i.done } : i) })
+  }
+  const handleDeleteWeekPlanItem = (id: string) => {
+    onUpsertWeeklyNote(weekKey, { planItems: weekPlanItems.filter(i => i.id !== id) })
+  }
 
   const visibleTasks = [...projectTasks]
     .filter(t => t.status !== 'abandoned')
@@ -759,6 +804,76 @@ export default function Board({
               </tfoot>
             </table>
           </section>
+
+          <section style={styles.panel}>
+            <div style={styles.planHeader}>
+              <div style={styles.planTitleGroup}>
+                <h3 style={styles.panelTitle}>{t('board.weekPlanTitle')}</h3>
+                <span style={styles.weekRangeBadge}>{weekRangeLabel}</span>
+              </div>
+              {weekPlanItems.length > 0 && (
+                <div style={styles.planProgress}>
+                  <PlanDonut pct={weekPlanItems.length ? weekPlanDoneCount / weekPlanItems.length : 0} size={36} />
+                  <span style={styles.planProgressLabel}>{t('monthPlan.planProgressLabel', { done: weekPlanDoneCount, total: weekPlanItems.length })}</span>
+                </div>
+              )}
+            </div>
+
+            <div style={styles.row}>
+              <input
+                style={{ ...styles.input, flex: 1, marginBottom: 8 }}
+                placeholder={t('board.weekPlanAddPlaceholder')}
+                value={newWeekItemTitle}
+                onChange={e => setNewWeekItemTitle(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddWeekPlanItem()}
+              />
+              <select
+                style={{ ...styles.input, width: 110, marginBottom: 8 }}
+                value={newWeekItemCategoryId}
+                onChange={e => setNewWeekItemCategoryId(e.target.value)}
+              >
+                <option value="">{t('deadlineModal.category')}</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button style={{ ...styles.planAddBtn, marginBottom: 8 }} onClick={handleAddWeekPlanItem}>{t('common.add')}</button>
+            </div>
+
+            {groupedWeekPlanItems.length === 0 ? (
+              <p style={styles.emptyText}>{t('board.weekPlanNoItems')}</p>
+            ) : (
+              <div style={styles.planCardGrid}>
+                {groupedWeekPlanItems.map(group => {
+                  const groupDone = group.items.filter(i => i.done).length
+                  const groupPct = group.items.length ? Math.round((groupDone / group.items.length) * 100) : 0
+                  return (
+                    <div key={group.key} style={styles.planCard}>
+                      <div style={styles.planCardHead}>
+                        <div style={styles.planCardHeadLeft}>
+                          <span style={{ ...styles.dot, background: group.color }} />
+                          <span style={styles.planCardLabel}>{group.label}</span>
+                        </div>
+                        <span style={styles.planCardMeta}>{groupDone}/{group.items.length} · {groupPct}%</span>
+                      </div>
+                      <div style={styles.planCardBarTrack}>
+                        <div style={{ ...styles.planCardBarFill, width: `${groupPct}%`, background: group.color }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {group.items.map(item => (
+                          <div key={item.id} style={styles.planItemRow}>
+                            <label style={styles.planItemLabel}>
+                              <input type="checkbox" checked={item.done} onChange={() => handleToggleWeekPlanItem(item.id)} />
+                              <span style={{ ...styles.planItemTitle, ...(item.done ? styles.taskNameDone : {}) }}>{item.title}</span>
+                            </label>
+                            <button style={styles.deleteBtn} onClick={() => handleDeleteWeekPlanItem(item.id)} aria-label={t('common.delete')}>x</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
         <div style={styles.rightCol}>
@@ -952,6 +1067,29 @@ function SwarmChart({ tasks, categories, projects, noCategoriesText, noTasksText
   )
 }
 
+function PlanDonut({ pct, size }: { pct: number; size: number }) {
+  const r = size / 2 - size * 0.13
+  const c = 2 * Math.PI * r
+  const clamped = Math.max(0, Math.min(1, pct))
+  const strokeWidth = Math.max(3, size * 0.13)
+  const cx = size / 2
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--border-soft)" strokeWidth={strokeWidth} />
+      <circle
+        cx={cx} cy={cx} r={r} fill="none" stroke="var(--primary)" strokeWidth={strokeWidth}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * clamped}
+        transform={`rotate(-90 ${cx} ${cx})`}
+      />
+      {size >= 30 && (
+        <text x={cx} y={cx + 4} textAnchor="middle" fontSize={size * 0.24} fontWeight={700} fill="var(--text-primary)">
+          {Math.round(clamped * 100)}%
+        </text>
+      )}
+    </svg>
+  )
+}
+
 function MonthDonut({ pct, label }: { pct: number; label: string }) {
   const r = 19
   const c = 2 * Math.PI * r
@@ -1066,4 +1204,21 @@ const styles: Record<string, CSSProperties> = {
   overdueTag: { fontSize: 9, fontWeight: 800, color: 'var(--danger)', background: 'var(--danger-soft)', borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap', flexShrink: 0 },
   overdueActionBtn: { border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   overduePostponeInput: { border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', font: 'inherit', fontSize: 10, boxSizing: 'border-box' },
+  planHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+  planTitleGroup: { display: 'flex', alignItems: 'center', gap: 10 },
+  weekRangeBadge: { fontSize: 11, color: 'var(--text-secondary)', background: 'var(--surface-muted)', borderRadius: 999, padding: '3px 10px', fontWeight: 700, whiteSpace: 'nowrap' },
+  planProgress: { display: 'flex', alignItems: 'center', gap: 8 },
+  planProgressLabel: { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' },
+  planAddBtn: { border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--primary)', color: '#fff', padding: '0 14px', cursor: 'pointer', fontWeight: 800, fontSize: 13 },
+  planCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 },
+  planCard: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface)', padding: 12, boxShadow: 'var(--shadow-card)' },
+  planCardHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 },
+  planCardHeadLeft: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
+  planCardLabel: { fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  planCardMeta: { fontSize: 10, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 },
+  planCardBarTrack: { height: 5, background: 'var(--surface-muted)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
+  planCardBarFill: { height: '100%', borderRadius: 3 },
+  planItemRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: '6px 9px', background: 'var(--surface-soft)' },
+  planItemLabel: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', flex: 1, minWidth: 0 },
+  planItemTitle: { color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 }

@@ -334,6 +334,9 @@ export const en = {
     monthlyHabitsLabel: 'Habits this month',
     noCycleTimeData: 'No completed task data yet',
     noCategoriesData: 'No categories yet',
+    weekPlanTitle: 'Week plan',
+    weekPlanAddPlaceholder: 'Add something to do this week…',
+    weekPlanNoItems: 'No plan items yet. Add one.',
   },
   statistics: {
     rangeToday: 'Today',

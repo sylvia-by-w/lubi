@@ -126,6 +126,20 @@ export interface MonthlyNote {
   planItems?: MonthlyPlanItem[]
 }
 
+export interface WeeklyPlanItem {
+  id: string
+  title: string
+  categoryId?: string
+  done: boolean
+}
+
+export interface WeeklyNote {
+  id: string
+  /** Monday of the week, formatted YYYY-MM-DD (same format as ProjectTask.dueDate). */
+  week: string
+  planItems?: WeeklyPlanItem[]
+}
+
 export interface AppState {
   categories: Category[]
   projects: Project[]
@@ -135,5 +149,6 @@ export interface AppState {
   habits: HabitItem[]
   habitLogs: HabitLog[]
   monthlyNotes: MonthlyNote[]
+  weeklyNotes: WeeklyNote[]
   activeTimer: ActiveTimer | null
 }

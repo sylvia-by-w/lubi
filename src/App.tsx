@@ -35,13 +35,13 @@ function getMonday(date: Date): Date {
 
 export default function App() {
   const {
-    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, aiConfig, activeTimer,
+    categories, projects, projectTasks, tasks, deadlines, habits, habitLogs, monthlyNotes, weeklyNotes, aiConfig, activeTimer,
     addTask, updateTask, deleteTask, addRecurringTasks, deleteTasksByRecurrenceId,
     addCategory, deleteCategory,
     addProject, updateProject, deleteProject,
     addProjectTask, updateProjectTask, deleteProjectTask,
     addDeadline, updateDeadline, deleteDeadline,
-    addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote,
+    addHabit, deleteHabit, archiveHabit, unarchiveHabit, toggleHabitLog, upsertMonthlyNote, upsertWeeklyNote,
     updateAIConfig,
     startTimer, stopTimer, discardTimer,
     exportAllData, importAllData,
@@ -188,6 +188,7 @@ export default function App() {
           tasks={tasks}
           habits={habits}
           habitLogs={habitLogs}
+          weeklyNotes={weeklyNotes}
           onAddProjectTask={addProjectTask}
           onUpdateProjectTask={updateProjectTask}
           onDeleteProjectTask={deleteProjectTask}
@@ -201,6 +202,7 @@ export default function App() {
           onArchiveHabit={archiveHabit}
           onUnarchiveHabit={unarchiveHabit}
           onToggleHabitLog={toggleHabitLog}
+          onUpsertWeeklyNote={upsertWeeklyNote}
         />
       ) : page === 'month' ? (
         <MonthPlan

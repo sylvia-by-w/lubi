@@ -334,6 +334,9 @@ export const zh = {
     monthlyHabitsLabel: '本月习惯',
     noCycleTimeData: '暂无已完成任务数据',
     noCategoriesData: '暂无分类',
+    weekPlanTitle: '周计划',
+    weekPlanAddPlaceholder: '添加一条本周想完成的事…',
+    weekPlanNoItems: '还没有周计划事项，添加一条吧。',
   },
   statistics: {
     rangeToday: '今天',
